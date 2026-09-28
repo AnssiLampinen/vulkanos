@@ -1,0 +1,18 @@
+# Cells where OSM buildings are complete; used as training labels.
+# One H3 cell id per line. Written by: python -m vulkanos label
+881e832d25fffff
+881e832d27fffff
+881e832d2dfffff
+881e9d9211fffff
+881e9d9213fffff
+881e9d9219fffff
+881e9d921bfffff
+881e9d921dfffff
+881e9d9251fffff
+881e9d9253fffff
+881e9d9257fffff
+881e9d925bfffff
+881e9d92c1fffff
+881e9d92c5fffff
+881e9d92c9fffff
+881e9d92cdfffff

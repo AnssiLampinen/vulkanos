@@ -1,0 +1,22 @@
+geopandas
+shapely
+pyproj
+rasterio
+h3>=4
+mercantile
+osmnx>=2
+requests
+pyyaml
+pyarrow
+folium
+branca
+scipy
+numpy
+pillow
+opencv-python
+huggingface_hub
+ultralytics
+onnxruntime
+pytest
+# CPU build of torch (ultralytics dependency):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu

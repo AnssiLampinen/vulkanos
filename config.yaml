@@ -1,0 +1,49 @@
+data_dir: data
+radius_km: 10
+h3_res: 8
+
+imagery:
+  provider: esri
+  zoom: 18          # ~0.6 m/px at the equator
+  chip_tiles: 2     # detector input = chip_tiles x chip_tiles tiles (512 px)
+  workers: 8
+
+detector:
+  name: yolo        # yolo | geobase_unet
+  conf: 0.25        # yolo only: detection confidence
+  threshold: 0.5    # probability threshold for a building pixel
+  # checkpoint: models/r34/best.pt   # for name: unet
+
+training:
+  dataset_dir: data/train
+  models_dir: models
+  val_fraction: 0.2     # share of complete cells held out for validation
+  ignore_edge_px: 2     # ignore band around OSM outlines (misalignment)
+  arch: Unet
+  encoder: resnet34
+  crop: 512
+  batch_size: 8
+  epochs: 30
+  lr: 0.0003
+  workers: 4
+  seed: 0
+
+compare:
+  osm_buffer_m: 2       # tolerance for OSM / imagery misalignment
+  min_object_m2: 15     # drop detected blobs smaller than this
+  low_signal_m2: 200    # cells with less detected building area get flagged
+  block_px: 8           # pixel block size used to assign pixels to H3 cells
+
+# Smithsonian GVP volcano numbers
+volcanoes:
+  - {id: vesuvius,   name: Vesuvius,   gvp: 211020, lat: 40.821,  lon: 14.426}
+  - {id: merapi,     name: Merapi,     gvp: 263250, lat: -7.540,  lon: 110.446}
+  - {id: nyiragongo, name: Nyiragongo, gvp: 223030, lat: -1.520,  lon: 29.250}
+  - {id: fuego,      name: Fuego,      gvp: 342090, lat: 14.473,  lon: -90.880}
+  - {id: taal,       name: Taal,       gvp: 273070, lat: 14.002,  lon: 120.993}
+
+# Small built-up sites for quick accuracy checks. Run with:
+#   python -m vulkanos run --site ercolano --radius-km 1.5
+test_sites:
+  - {id: ercolano, name: Ercolano (Vesuvius), lat: 40.806, lon: 14.349}
+  - {id: goma,     name: Goma (Nyiragongo),   lat: -1.670, lon: 29.230}

@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cell Labeler</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --border: #dcdcd6;
+    --accent: #0a7d45; --accent-text: #ffffff; --warn: #b54708;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161615; --panel: #1f1f1d; --text: #ecece8; --muted: #a3a39c; --border: #3a3a36;
+      --accent: #2fbf71; --accent-text: #0b1a12; --warn: #f79009;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #app { display: flex; height: 100%; }
+  #map { flex: 1; min-width: 0; }
+  #side { width: 300px; padding: 16px; overflow-y: auto; background: var(--panel);
+    border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 17px; margin: 0; }
+  p { margin: 0; color: var(--muted); }
+  .count { font-size: 28px; font-weight: 650; color: var(--text); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { font: inherit; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent);
+    font-weight: 600; flex: 1; }
+  button:disabled, button.primary:disabled { background: var(--bg); color: var(--muted);
+    border-color: var(--border); cursor: default; }
+  #status { min-height: 1.4em; }
+  #status.dirty { color: var(--warn); }
+  .legend div { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .sw { width: 14px; height: 14px; border-radius: 3px; flex: none; }
+  code { font-size: 12px; word-break: break-all; }
+  kbd { font: 12px ui-monospace, monospace; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+  @media (max-width: 700px) {
+    #app { flex-direction: column; }
+    #side { width: 100%; max-height: 45%; border-left: 0; border-top: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+  <aside id="side">
+    <div>
+      <h1>Complete cells for training</h1>
+      <p>Click a cell to mark it complete. Choose cells where the yellow OSM outlines cover nearly every roof.</p>
+    </div>
+    <div>
+      <div class="count" id="count">0</div>
+      <p>cells selected</p>
+    </div>
+    <div class="row">
+      <button class="primary" id="save">Submit</button>
+      <button id="clear">Clear</button>
+    </div>
+    <p id="status">Loading…</p>
+    <div>
+      <p style="margin-bottom:6px">Jump to site</p>
+      <div class="row" id="sites"></div>
+    </div>
+    <div class="legend">
+      <div><span class="sw" style="background:rgba(0,230,118,.35);border:2px solid #00e676"></span>selected (complete)</div>
+      <div><span class="sw" style="border:1px solid #fff;background:#8884"></span>not selected</div>
+      <div><span class="sw" style="border:2px solid #ffd400"></span>OSM building</div>
+    </div>
+    <p>Keys: <kbd>O</kbd> OSM outlines, <kbd>H</kbd> hide cells, <kbd>D</kbd> detections overlay.</p>
+    <p>Saves to <code id="file"></code></p>
+  </aside>
+</div>
+<script>
+const map = L.map('map', { preferCanvas: true, maxZoom: 21 });
+const imagery = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  { maxZoom: 21, maxNativeZoom: 19, attribution: 'Esri World Imagery' }).addTo(map);
+const carto = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  { maxZoom: 21, maxNativeZoom: 20, subdomains: 'abcd',
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO' });
+
+const $ = (id) => document.getElementById(id);
+let selected = new Set();
+let saved = new Set();
+let cellLayer, osmLayer, overlayLayer;
+const cellsById = {};
+
+const cellStyle = (id) => selected.has(id)
+  ? { color: '#00e676', weight: 2.5, fillColor: '#00e676', fillOpacity: 0.28 }
+  : { color: '#ffffff', weight: 1, opacity: 0.8, fillColor: '#888888', fillOpacity: 0.06 };
+
+function fmt(v, digits = 0) {
+  return v === null || v === undefined ? '–' : Number(v).toLocaleString(undefined, { maximumFractionDigits: digits });
+}
+
+function refresh() {
+  $('count').textContent = selected.size;
+  const dirty = selected.size !== saved.size || [...selected].some((c) => !saved.has(c));
+  $('status').textContent = dirty ? 'Unsaved changes' : 'Saved';
+  $('status').className = dirty ? 'dirty' : '';
+  $('save').disabled = !dirty;
+  return dirty;
+}
+
+function toggle(id) {
+  selected.has(id) ? selected.delete(id) : selected.add(id);
+  cellsById[id].setStyle(cellStyle(id));
+  refresh();
+}
+
+Promise.all([
+  fetch('/api/data').then((r) => r.json()),
+  fetch('/api/selected').then((r) => r.json()),
+]).then(([d, fileCells]) => {
+  $('file').textContent = d.file;
+  const loaded = new Set(d.cells.features.map((f) => f.properties.cell_id));
+  selected = new Set(fileCells.filter((c) => loaded.has(c)));
+  saved = new Set(selected);
+
+  const osmGroup = L.featureGroup();
+  const osmRenderer = L.canvas({ padding: 0.3 });
+  for (const s of d.sites) {
+    L.geoJSON(d.osm[s.id], { interactive: false, renderer: osmRenderer,
+      style: { color: '#ffd400', weight: 1.2, fill: false } }).addTo(osmGroup);
+  }
+  osmLayer = osmGroup.addTo(map);
+
+  const overlays = d.sites.filter((s) => s.overlay)
+    .map((s) => L.imageOverlay(s.overlay.url, s.overlay.bounds, { opacity: 0.85 }));
+  overlayLayer = overlays.length ? L.layerGroup(overlays) : null;
+
+  cellLayer = L.geoJSON(d.cells, {
+    style: (f) => cellStyle(f.properties.cell_id),
+    onEachFeature: (f, layer) => {
+      const p = f.properties;
+      cellsById[p.cell_id] = layer;
+      layer.bindTooltip(
+        `<b>${p.cell_id}</b><br>site ${p.site} · ${fmt(p.dist_km, 1)} km<br>` +
+        `OSM ${fmt(p.osm_m2)} m² · detected ${fmt(p.pred_m2)} m²<br>completeness ${fmt(p.completeness, 2)}`,
+        { sticky: true });
+      layer.on('click', () => toggle(p.cell_id));
+    },
+  }).addTo(map);
+
+  const baseLayers = { 'Imagery': imagery, 'OSM map (Carto)': carto };
+  const extra = { 'Cells': cellLayer, 'OSM outlines': osmLayer };
+  if (overlayLayer) extra['Detections vs OSM'] = overlayLayer;
+  L.control.layers(baseLayers, extra, { collapsed: false }).addTo(map);
+
+  const fitSite = (id) => {
+    const g = L.featureGroup(Object.values(cellsById).filter((l) => l.feature.properties.site === id));
+    map.fitBounds(g.getBounds());
+  };
+  for (const s of d.sites) {
+    const b = document.createElement('button');
+    b.textContent = s.name;
+    b.onclick = () => fitSite(s.id);
+    $('sites').appendChild(b);
+  }
+  fitSite(d.sites[0].id);
+  refresh();
+}).catch((e) => { $('status').textContent = 'Failed to load data: ' + e; });
+
+$('save').onclick = async () => {
+  $('save').disabled = true;
+  $('status').textContent = 'Saving…';
+  try {
+    const r = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cells: [...selected] }) });
+    if (!r.ok) throw new Error(await r.text());
+    const res = await r.json();
+    saved = new Set(selected);
+    refresh();
+    $('status').textContent = `Saved ${res.saved} cells (${res.total} in file)`;
+  } catch (e) {
+    $('status').textContent = 'Save failed: ' + e.message;
+    $('status').className = 'dirty';
+    $('save').disabled = false;
+  }
+};
+
+$('clear').onclick = () => {
+  if (!selected.size || !confirm(`Clear all ${selected.size} selected cells? (The file changes only on Submit.)`)) return;
+  const ids = [...selected];
+  selected.clear();
+  ids.forEach((id) => cellsById[id].setStyle(cellStyle(id)));
+  refresh();
+};
+
+function toggleLayer(layer) {
+  if (!layer) return;
+  map.hasLayer(layer) ? map.removeLayer(layer) : map.addLayer(layer);
+}
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'o') toggleLayer(osmLayer);
+  if (k === 'h') toggleLayer(cellLayer);
+  if (k === 'd') toggleLayer(overlayLayer);
+});
+
+window.addEventListener('beforeunload', (e) => {
+  if (refresh()) { e.preventDefault(); e.returnValue = ''; }
+});
+</script>
+</body>
+</html>
