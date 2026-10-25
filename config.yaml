@@ -34,6 +34,7 @@ compare:
   block_px: 8
   house_min_sep_m: 4  # touching detections get split into houses at least this far apart
   min_blob_prob: 0.8  # green blobs with a lower mean probability are dropped, 0 turns it off
+  ragged_holes: 5  # green blobs with this many holes and jagged edges are dropped (scrub, bare ground), 0 turns it off
 
 volcanoes:
   - {id: vesuvius, name: Vesuvius, lat: 40.821, lon: 14.426}
