@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>labeler</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  body { margin: 0; font: 14px sans-serif; }
+  #map { position: absolute; top: 0; bottom: 0; left: 0; right: 260px; }
+  #side { position: absolute; top: 0; bottom: 0; right: 0; width: 240px; padding: 10px; overflow-y: auto; }
+  #count { font-size: 24px; font-weight: bold; }
+  button { margin: 2px 0; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="side">
+  <p>Click cells where the yellow OSM outlines cover nearly every roof.</p>
+  <p><span id="count">0</span> cells selected</p>
+  <button id="save">Submit</button> <button id="clear">Clear</button>
+  <p id="status">loading...</p>
+  <p id="sites"></p>
+  <p>Saves to <code id="file"></code></p>
+</div>
+<script>
+var map = L.map('map', {preferCanvas: true, maxZoom: 21});
+var imagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {maxZoom: 21, maxNativeZoom: 19, attribution: 'Esri World Imagery'}).addTo(map);
+var carto = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+  {maxZoom: 21, maxNativeZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO'});
+
+var selected = new Set();
+var saved = new Set();
+var cellLayers = {};
+
+function cellStyle(id) {
+  if (selected.has(id)) return {color: '#00e676', weight: 2.5, fillColor: '#00e676', fillOpacity: 0.3};
+  return {color: '#fff', weight: 1, opacity: 0.8, fillColor: '#888', fillOpacity: 0.05};
+}
+
+function update() {
+  document.getElementById('count').textContent = selected.size;
+  var changed = selected.size != saved.size || [...selected].some(c => !saved.has(c));
+  document.getElementById('status').textContent = changed ? 'not saved' : 'saved';
+}
+
+function fmt(v) {
+  return v == null ? '-' : Math.round(v);
+}
+
+Promise.all([fetch('/api/data').then(r => r.json()), fetch('/api/selected').then(r => r.json())]).then(([d, inFile]) => {
+  document.getElementById('file').textContent = d.file;
+  var ids = new Set(d.cells.features.map(f => f.properties.cell_id));
+  selected = new Set(inFile.filter(c => ids.has(c)));
+  saved = new Set(selected);
+
+  var osm = L.featureGroup();
+  d.sites.forEach(s => L.geoJSON(d.osm[s.id], {interactive: false, style: {color: '#ffd400', weight: 1.2, fill: false}}).addTo(osm));
+  osm.addTo(map);
+
+  var cells = L.geoJSON(d.cells, {
+    style: f => cellStyle(f.properties.cell_id),
+    onEachFeature: (f, layer) => {
+      var p = f.properties;
+      cellLayers[p.cell_id] = layer;
+      layer.bindTooltip(p.cell_id + '<br>' + p.dist_km + ' km<br>OSM ' + fmt(p.osm_m2) + ' m2, detected ' + fmt(p.pred_m2) +
+        ' m2<br>completeness ' + (p.completeness == null ? '-' : p.completeness), {sticky: true});
+      layer.on('click', () => {
+        if (selected.has(p.cell_id)) selected.delete(p.cell_id); else selected.add(p.cell_id);
+        layer.setStyle(cellStyle(p.cell_id));
+        update();
+      });
+    }
+  }).addTo(map);
+
+  var overlays = {'Cells': cells, 'OSM outlines': osm};
+  var images = d.sites.filter(s => s.overlay).map(s => L.imageOverlay(s.overlay[0], s.overlay[1], {opacity: 0.85}));
+  if (images.length) overlays['Detections vs OSM'] = L.layerGroup(images);
+  L.control.layers({'Imagery': imagery, 'OSM map': carto}, overlays, {collapsed: false}).addTo(map);
+
+  function zoomTo(id) {
+    map.fitBounds(L.featureGroup(Object.values(cellLayers).filter(l => l.feature.properties.site == id)).getBounds());
+  }
+  d.sites.forEach(s => {
+    var b = document.createElement('button');
+    b.textContent = s.name;
+    b.onclick = () => zoomTo(s.id);
+    document.getElementById('sites').appendChild(b);
+  });
+  zoomTo(d.sites[0].id);
+  update();
+});
+
+document.getElementById('save').onclick = () => {
+  fetch('/api/save', {method: 'POST', body: JSON.stringify({cells: [...selected]})})
+    .then(r => r.json())
+    .then(res => {
+      saved = new Set(selected);
+      update();
+      document.getElementById('status').textContent = 'saved ' + res.saved + ' cells (' + res.total + ' in file)';
+    })
+    .catch(e => { document.getElementById('status').textContent = 'save failed: ' + e; });
+};
+
+document.getElementById('clear').onclick = () => {
+  selected.clear();
+  Object.keys(cellLayers).forEach(id => cellLayers[id].setStyle(cellStyle(id)));
+  update();
+};
+</script>
+</body>
+</html>

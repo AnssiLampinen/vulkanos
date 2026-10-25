@@ -19,6 +19,3 @@ huggingface_hub
 ultralytics
 onnxruntime
 segmentation-models-pytorch
-pytest
-# CPU build of torch (ultralytics dependency):
-#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu

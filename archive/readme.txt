@@ -1,1 +1,0 @@
-previous attempts at solving the problem, ignore this folder completely.
