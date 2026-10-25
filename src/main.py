@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 import geopandas as gpd
+import mercantile
 import pandas as pd
 import yaml
 
@@ -64,6 +65,7 @@ def run(cfg, s, steps, radius):
     if "tiles" in steps:
         t0 = time.time()
         tiles = [t for c in chips for t in data.children(c, zoom)]
+        tiles += list(mercantile.tiles(*data.frame(s, cfg["map_km"]), zooms=report.FRAME_ZOOM))
         counts = data.download_tiles(cfg, tiles)
         print(f"[{s['id']}] {len(tiles)} tiles {dict(counts)} ({time.time() - t0:.0f}s)")
 
@@ -95,7 +97,8 @@ def run(cfg, s, steps, radius):
         tiles = os.path.relpath(cfg["data_dir"] / "tiles" / cfg["imagery"]["provider"], out.parent)
         tiles = tiles.replace("\\", "/") + "/{z}/{x}/{y}.jpg"
         report.cell_map(gpd.read_parquet(scored_path(cfg, s)), s, out, report.overlay(cfg, chips, osm, preds),
-                        report.imagery(cfg, chips), report.outlines(cfg, chips, osm, preds), tiles)
+                        report.imagery(cfg, s), report.outlines(cfg, chips, osm, preds), tiles,
+                        data.frame(s, cfg["map_km"]))
         print(f"[{s['id']}] map in {out}")
 
 

@@ -1,5 +1,6 @@
 data_dir: data
 radius_km: 10
+map_km: 10  # the map shows this square around the site
 h3_res: 8
 
 imagery:
