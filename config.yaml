@@ -33,6 +33,7 @@ compare:
   min_object_m2: 15     # drop detected blobs smaller than this
   low_signal_m2: 200    # cells with less detected building area get flagged
   block_px: 8           # pixel block size used to assign pixels to H3 cells
+  house_min_sep_m: 4    # min distance between house centres when splitting touching detections
 
 # Smithsonian GVP volcano numbers
 volcanoes:

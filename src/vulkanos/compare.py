@@ -28,7 +28,13 @@ SUM_FIELDS = [
     "osm_detected_m2",  # OSM area near a detection
     "pred_count",  # detected objects
     "unmatched_count",  # detected objects with no OSM building nearby
+    "house_count",  # detected houses (objects split by split_houses)
+    "house_unmatched_count",  # detected houses with no OSM building nearby
+    "osm_house_count",  # OSM buildings, by representative point, on imagery pixels
+    "osm_house_detected_count",  # ... of which have a detection nearby
 ]
+
+WEB_MERCATOR_HALF_M = math.pi * 6378137.0
 
 
 def pixel_size_m(lat: float, zoom: int, tile_px: int = 256) -> float:
@@ -70,9 +76,60 @@ def pixel_masks(pred: np.ndarray, osm: np.ndarray, valid: np.ndarray, buffer_px:
     }
 
 
-def objects(pred: np.ndarray, osm: np.ndarray, buffer_px: int) -> tuple[np.ndarray, np.ndarray]:
-    """Detected objects. Returns (centroids Nx2 as row/col, matched N bool)."""
-    labels, n = ndimage.label(pred, structure=np.ones((3, 3)))
+def split_houses(pred: np.ndarray, min_sep_px: int) -> tuple[np.ndarray, int]:
+    """Split a building mask into houses. Returns (labels HxW int32, count).
+
+    Touching buildings form one blob in the mask. Each blob is cut by a
+    watershed on the distance to the background, seeded at distance peaks at
+    least min_sep_px apart, so blobs joined by a narrow neck become separate
+    houses. Works on any detector's mask; row houses sharing a full wall stay
+    one house.
+    """
+    blobs, n_blobs = ndimage.label(pred, structure=np.ones((3, 3)))
+    if n_blobs == 0:
+        return np.zeros(pred.shape, np.int32), 0
+    dist = ndimage.gaussian_filter(ndimage.distance_transform_edt(pred), 1.0)
+    size = 2 * max(int(min_sep_px), 1) + 1
+    peaks = pred & (dist == ndimage.maximum_filter(dist, size=size))
+    seeds, n = ndimage.label(peaks, structure=np.ones((3, 3)))
+    # A small blob next to a bigger one can lose its peak to the bigger one's
+    # window; seed such blobs with the whole blob.
+    seeded = ndimage.maximum(seeds > 0, blobs, np.arange(1, n_blobs + 1)).astype(bool)
+    unseeded = np.flatnonzero(~np.atleast_1d(seeded)) + 1
+    if len(unseeded):
+        extra = np.isin(blobs, unseeded)
+        seeds[extra] = n + np.searchsorted(unseeded, blobs[extra]) + 1
+        n += len(unseeded)
+    elevation = np.round((dist.max() - dist) / max(dist.max(), 1e-6) * 65535).astype(np.uint16)
+    markers = seeds.astype(np.int32)
+    markers[~pred] = -1
+    labels = ndimage.watershed_ift(elevation, markers)
+    labels[~pred] = 0
+    # Renumber so labels are 1..count with no gaps.
+    present = np.unique(labels[labels > 0])
+    lookup = np.zeros(n + 1, np.int32)
+    lookup[present] = np.arange(1, len(present) + 1)
+    return lookup[labels], len(present)
+
+
+def house_edges(labels: np.ndarray) -> np.ndarray:
+    """Pixels where two different houses touch (the cuts made by split_houses)."""
+    edges = np.zeros(labels.shape, bool)
+    left, right = labels[:, :-1], labels[:, 1:]
+    edges[:, :-1] |= (left != right) & (left > 0) & (right > 0)
+    up, down = labels[:-1, :], labels[1:, :]
+    edges[:-1, :] |= (up != down) & (up > 0) & (down > 0)
+    return edges
+
+
+def objects(
+    pred: np.ndarray, osm: np.ndarray, buffer_px: int, labels: tuple[np.ndarray, int] | None = None
+) -> tuple[np.ndarray, np.ndarray]:
+    """Detected objects. Returns (centroids Nx2 as row/col, matched N bool).
+
+    Objects are connected blobs of pred, or the given (labels, count), e.g.
+    from split_houses."""
+    labels, n = labels if labels is not None else ndimage.label(pred, structure=np.ones((3, 3)))
     if n == 0:
         return np.zeros((0, 2)), np.zeros(0, bool)
     idx = np.arange(1, n + 1)
@@ -113,6 +170,61 @@ def rasterize_osm(osm_3857: gpd.GeoDataFrame, chip: mercantile.Tile, size_px: in
     ).astype(bool)
 
 
+def rasterize_osm_ids(osm_3857: gpd.GeoDataFrame, chip: mercantile.Tile, size_px: int) -> np.ndarray:
+    """OSM buildings burned in as their row position + 1 (0 = no building)."""
+    bounds = mercantile.xy_bounds(chip)
+    hits = osm_3857.sindex.query(box(*bounds))
+    if len(hits) == 0:
+        return np.zeros((size_px, size_px), np.int32)
+    return rasterize(
+        zip(osm_3857.geometry.iloc[hits], hits + 1),
+        out_shape=(size_px, size_px),
+        transform=from_bounds(*bounds, size_px, size_px),
+        fill=0,
+        dtype="int32",
+    )
+
+
+def osm_points_by_chip(osm_3857: gpd.GeoDataFrame, z: int) -> dict[tuple[int, int], np.ndarray]:
+    """Row positions of OSM buildings grouped by the zoom-z tile holding their
+    representative point, so each building is counted in exactly one chip."""
+    if len(osm_3857) == 0:
+        return {}
+    pts = osm_3857.geometry.representative_point()
+    n = 2**z
+    tx = np.floor((pts.x.to_numpy() + WEB_MERCATOR_HALF_M) / (2 * WEB_MERCATOR_HALF_M) * n).astype(int)
+    ty = np.floor((WEB_MERCATOR_HALF_M - pts.y.to_numpy()) / (2 * WEB_MERCATOR_HALF_M) * n).astype(int)
+    groups = pd.Series(np.arange(len(pts))).groupby([tx, ty]).groups
+    return {k: np.asarray(v) for k, v in groups.items()}
+
+
+def osm_houses(
+    osm_3857: gpd.GeoDataFrame,
+    rows_in_chip: np.ndarray,
+    chip: mercantile.Tile,
+    pred: np.ndarray,
+    valid: np.ndarray,
+    buffer_px: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """OSM buildings whose representative point lies on an imagery pixel of
+    this chip. Returns (points Nx2 as row/col, detected N bool)."""
+    size = pred.shape[0]
+    if len(rows_in_chip) == 0:
+        return np.zeros((0, 2)), np.zeros(0, bool)
+    west, south, east, north = mercantile.xy_bounds(chip)
+    pts = osm_3857.geometry.iloc[rows_in_chip].representative_point()
+    col = np.clip(((pts.x.to_numpy() - west) / (east - west) * size).astype(int), 0, size - 1)
+    row = np.clip(((north - pts.y.to_numpy()) / (north - south) * size).astype(int), 0, size - 1)
+    keep = valid[row, col]
+    row, col, ids = row[keep], col[keep], rows_in_chip[keep] + 1
+    if len(ids) == 0:
+        return np.zeros((0, 2)), np.zeros(0, bool)
+    id_raster = rasterize_osm_ids(osm_3857, chip, size)
+    # A building hidden under an overlapping one gets max 0: counted as not detected.
+    detected = ndimage.maximum(dilate(pred, buffer_px), id_raster, ids)
+    return np.stack([row, col], axis=1), np.atleast_1d(np.asarray(detected, bool))
+
+
 def chip_masks(
     chip: mercantile.Tile,
     osm_3857: gpd.GeoDataFrame,
@@ -151,9 +263,11 @@ def score_chips(
     osm_buffer_m: float,
     min_object_m2: float,
     block_px: int,
+    house_min_sep_m: float = 4.0,
 ) -> pd.DataFrame:
     """Per-cell sums over all chips with a saved prediction."""
     osm_3857 = osm.to_crs(3857)
+    osm_by_chip = osm_points_by_chip(osm_3857, chips[0].z) if chips else {}
     parts = []
 
     for chip in chips:
@@ -175,6 +289,24 @@ def score_chips(
         np.add.at(pred_count, (rows, cols), 1)
         np.add.at(unmatched_count, (rows, cols), ~matched)
 
+        houses = split_houses(masks["pred"], math.ceil(house_min_sep_m / px_m))
+        centroids, matched = objects(masks["pred"], masks["osm"], buffer_px, houses)
+        house_count = np.zeros(cells.shape)
+        house_unmatched = np.zeros(cells.shape)
+        rows, cols = (centroids // block_px).astype(int).T
+        np.add.at(house_count, (rows, cols), 1)
+        np.add.at(house_unmatched, (rows, cols), ~matched)
+
+        points, detected = osm_houses(
+            osm_3857, osm_by_chip.get((chip.x, chip.y), np.zeros(0, int)), chip,
+            masks["pred"], masks["valid"], buffer_px,
+        )
+        osm_house_count = np.zeros(cells.shape)
+        osm_house_detected = np.zeros(cells.shape)
+        rows, cols = (points // block_px).astype(int).T
+        np.add.at(osm_house_count, (rows, cols), 1)
+        np.add.at(osm_house_detected, (rows, cols), detected)
+
         chip_df = pd.DataFrame(
             {
                 "cell_id": cells.ravel(),
@@ -182,6 +314,10 @@ def score_chips(
                 **{f"{k}_m2": blocks[k].ravel() * px_m2 for k in blocks},
                 "pred_count": pred_count.ravel(),
                 "unmatched_count": unmatched_count.ravel(),
+                "house_count": house_count.ravel(),
+                "house_unmatched_count": house_unmatched.ravel(),
+                "osm_house_count": osm_house_count.ravel(),
+                "osm_house_detected_count": osm_house_detected.ravel(),
             }
         )
         chip_df = chip_df[chip_df["cell_id"].isin(cell_ids)]
@@ -201,7 +337,30 @@ def add_scores(df: pd.DataFrame, low_signal_m2: float, min_coverage: float = 0.5
         # and recall_vs_osm = detector recall.
         df["recall_vs_osm"] = df["osm_detected_m2"] / df["osm_m2"]
         df["imagery_coverage"] = df["valid_m2"] / df["total_m2"]
+        # Same scores counted in houses instead of m2.
+        df["house_completeness"] = 1 - df["house_unmatched_count"] / df["house_count"]
+        df["house_recall_vs_osm"] = df["osm_house_detected_count"] / df["osm_house_count"]
     df["gap_score"] = df["missed_m2"]
+    df["house_gap"] = df["house_unmatched_count"]
     df["low_signal"] = df["pred_m2"] < low_signal_m2
     df["no_imagery"] = df["imagery_coverage"].fillna(0) < min_coverage
     return df
+
+
+def area_summary(scored: pd.DataFrame, by: str = "volcano") -> pd.DataFrame:
+    """Whole-area completeness per `by` group, from cells with imagery.
+
+    Ratios of sums, not means of cell scores, so each cell counts by how much
+    building it has and empty cells do not dilute the result.
+    """
+    usable = scored[~scored["no_imagery"].fillna(True).astype(bool)]
+    g = usable.groupby(by)
+    sums = g[["pred_m2", "missed_m2", "house_count", "house_unmatched_count"]].sum()
+    out = pd.DataFrame(index=sums.index)
+    out["cells"] = scored.groupby(by).size()
+    out["coverage"] = g.size() / out["cells"]
+    out["completeness"] = 1 - sums["missed_m2"] / sums["pred_m2"]
+    out["house_completeness"] = 1 - sums["house_unmatched_count"] / sums["house_count"]
+    out["houses"] = sums["house_count"].astype(int)
+    out["unmapped_houses"] = sums["house_unmatched_count"].astype(int)
+    return out

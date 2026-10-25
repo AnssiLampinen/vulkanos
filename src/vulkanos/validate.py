@@ -3,6 +3,9 @@
 On a cell with complete OSM buildings, OSM is ground truth:
   precision = share of detected area near an OSM building
   recall    = share of OSM area near a detection
+The house_* columns are the same counted in houses, and house_count_ratio
+(detected houses / OSM buildings) shows whether split_houses over- or
+under-splits.
 """
 
 import pandas as pd
@@ -27,4 +30,11 @@ def detector_metrics(scored: pd.DataFrame, complete_cells: list[str]) -> pd.Data
     out["precision"] = 1 - g["missed_m2"] / g["pred_m2"]
     out["recall"] = g["osm_detected_m2"] / g["osm_m2"]
     out["f1"] = 2 * out["precision"] * out["recall"] / (out["precision"] + out["recall"])
+    house_fields = ["house_count", "house_unmatched_count", "osm_house_count", "osm_house_detected_count"]
+    if all(f in sel.columns for f in house_fields):
+        h = sel.groupby("volcano")[house_fields].sum()
+        h.loc["ALL"] = h.sum()
+        out["house_precision"] = 1 - h["house_unmatched_count"] / h["house_count"]
+        out["house_recall"] = h["osm_house_detected_count"] / h["osm_house_count"]
+        out["house_count_ratio"] = h["house_count"] / h["osm_house_count"]
     return out.round(3)
