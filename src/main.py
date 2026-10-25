@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
@@ -90,8 +91,11 @@ def run(cfg, s, steps, radius):
 
     if "report" in steps:
         out = cfg["data_dir"] / "out" / f"{s['id']}_{tag}.html"
+        # relative so the map in data/out finds them, forward slashes for windows
+        tiles = os.path.relpath(cfg["data_dir"] / "tiles" / cfg["imagery"]["provider"], out.parent)
+        tiles = tiles.replace("\\", "/") + "/{z}/{x}/{y}.jpg"
         report.cell_map(gpd.read_parquet(scored_path(cfg, s)), s, out, report.overlay(cfg, chips, osm, preds),
-                        report.imagery(cfg, chips), report.outlines(cfg, chips, osm, preds))
+                        report.imagery(cfg, chips), report.outlines(cfg, chips, osm, preds), tiles)
         print(f"[{s['id']}] map in {out}")
 
 
