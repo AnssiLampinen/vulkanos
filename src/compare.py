@@ -142,16 +142,29 @@ def block_sum(mask, block):
     return mask.reshape(h // block, block, w // block, block).sum(axis=(1, 3))
 
 
+def drop_unsure(pred, prob, rgb, min_prob):
+    # false blobs on trees and fields are green and unsure, greenhouses are green but sure
+    labels, n = ndimage.label(pred, structure=np.ones((3, 3)))
+    if n == 0:
+        return pred
+    idx = np.arange(1, n + 1)
+    green = 2.0 * rgb[..., 1] - rgb[..., 0] - rgb[..., 2]
+    unsure = (ndimage.mean(prob, labels, idx) < min_prob) & (ndimage.mean(green, labels, idx) > 0)
+    return np.concatenate([[False], ~unsure])[labels]
+
+
 def chip_masks(cfg, chip, osm, pred_dir):
     prob = load_prob(pred_path(pred_dir, chip))
     if prob is None:
         return None
-    _, valid = load_chip(cfg, chip)
+    rgb, valid = load_chip(cfg, chip)
     b = mercantile.bounds(chip)
     px = pixel_size((b.north + b.south) / 2, cfg["imagery"]["zoom"])
     buf = math.ceil(cfg["compare"]["osm_buffer_m"] / px)
     pred = remove_small(prob >= cfg["detector"]["threshold"], math.ceil(cfg["compare"]["min_object_m2"] / (px * px)))
     pred = pred & valid
+    if cfg["compare"]["min_blob_prob"]:
+        pred = drop_unsure(pred, prob, rgb, cfg["compare"]["min_blob_prob"])
     osm = rasterize_osm(osm, chip, prob.shape[0]) & valid
     masks = {
         "valid": valid,
