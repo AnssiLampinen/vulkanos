@@ -32,6 +32,7 @@ compare:
   min_object_m2: 15
   low_signal_m2: 200  # cells with less detected area are greyed out
   block_px: 8
+  house_min_sep_m: 4  # touching detections get split into houses at least this far apart
 
 volcanoes:
   - {id: vesuvius, name: Vesuvius, lat: 40.821, lon: 14.426}

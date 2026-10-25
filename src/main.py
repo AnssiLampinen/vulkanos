@@ -84,6 +84,9 @@ def run(cfg, s, steps, radius):
         ok = scored[(scored["low_signal"] == False) & (scored["no_imagery"] == False)]
         print(f"[{s['id']}] {len(scored)} cells, {len(ok)} with signal, "
               f"median completeness {ok['completeness'].median():.2f}")
+        a = compare.area_summary(scored).iloc[0]
+        print(f"[{s['id']}] whole area completeness {a['completeness']:.2f} by m2, {a['house_completeness']:.2f} "
+              f"by houses, {a['unmapped_houses']} of {a['houses']} houses not in osm")
 
     if "report" in steps:
         out = cfg["data_dir"] / "out" / f"{s['id']}_{tag}.html"
