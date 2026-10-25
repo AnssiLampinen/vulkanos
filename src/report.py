@@ -124,7 +124,7 @@ def outlines(cfg, chips, osm, pred_dir, max_px=8192):
     return to_layer(img, chips, "PNG", optimize=True)
 
 
-def cell_map(scored, site, out, overlay=None, imagery=None, outlines=None):
+def cell_map(scored, site, out, overlay=None, imagery=None, outlines=None, tiles=None):
     gdf = scored.copy()
     for c in ["completeness", "house_completeness", "missed_m2", "pred_m2", "osm_m2", "recall_vs_osm",
               "imagery_coverage"]:
@@ -149,6 +149,10 @@ def cell_map(scored, site, out, overlay=None, imagery=None, outlines=None):
         # tile pane so it stays under the cells and detections
         folium.raster_layers.ImageOverlay(imagery[0], bounds=imagery[1], name="Imagery (downloaded tiles)",
                                           interactive=False, pane="tilePane").add_to(m)
+    if tiles:
+        # full resolution from data/tiles when zoomed in, too many to embed
+        folium.TileLayer(tiles, attr="Esri World Imagery", name="Imagery (tile folder)", overlay=True,
+                         min_zoom=16, max_zoom=20, min_native_zoom=18, max_native_zoom=18).add_to(m)
     # same colours for both so they can be compared by toggling
     for field, name, show in [("completeness", "Completeness (area)", True),
                               ("house_completeness", "Completeness (houses)", False)]:
