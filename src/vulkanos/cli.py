@@ -194,7 +194,13 @@ def label_sites(cfg: dict, vs: list[Volcano]) -> list[labeler.Site]:
     return sites
 
 
-def build_dataset(cfg: dict, vs: list[Volcano], cells_file: Path | None, out_dir: Path) -> None:
+def build_dataset(
+    cfg: dict,
+    vs: list[Volcano],
+    cells_file: Path | None,
+    out_dir: Path,
+    positives_everywhere: bool = False,
+) -> None:
     img, tr = cfg["imagery"], cfg["training"]
     sites, all_cells = [], {}
     for v in vs:
@@ -218,6 +224,7 @@ def build_dataset(cfg: dict, vs: list[Volcano], cells_file: Path | None, out_dir
         tr["val_fraction"],
         tr["ignore_edge_px"],
         tr.get("seed", 0),
+        positives_everywhere=positives_everywhere,
     )
     counts = index.groupby(["site", "split"]).size().unstack(fill_value=0) if len(index) else index
     print(counts.to_string() if len(index) else "no chips written")
@@ -249,6 +256,11 @@ def main(argv: list[str] | None = None) -> None:
     ds.add_argument("--cells-file", type=Path, help=f"complete cells, one per line (e.g. {DEFAULT_CELLS_FILE})")
     ds.add_argument("--assume-complete", action="store_true", help="treat every cell as complete (quick tests)")
     ds.add_argument("--out", type=Path, help="output folder; default training.dataset_dir")
+    ds.add_argument(
+        "--positives-everywhere",
+        action="store_true",
+        help="also train on OSM buildings outside the complete cells (their background is ignored)",
+    )
 
     lb = sub.add_parser("label", parents=[common, area, detector], help="pick complete cells in the browser")
     lb.add_argument("--cells-file", type=Path, default=DEFAULT_CELLS_FILE)
@@ -298,7 +310,11 @@ def main(argv: list[str] | None = None) -> None:
     if args.cmd == "dataset":
         if bool(args.cells_file) == args.assume_complete:
             p.error("give exactly one of --cells-file or --assume-complete")
-        build_dataset(cfg, vs, args.cells_file, args.out or Path(tr["dataset_dir"]))
+        if args.positives_everywhere and args.assume_complete:
+            p.error("--positives-everywhere needs --cells-file (with --assume-complete every cell is complete)")
+        build_dataset(
+            cfg, vs, args.cells_file, args.out or Path(tr["dataset_dir"]), args.positives_everywhere
+        )
         return
 
     if args.detector:
@@ -307,6 +323,11 @@ def main(argv: list[str] | None = None) -> None:
         cfg["detector"]["checkpoint"] = args.checkpoint
     if cfg["detector"]["name"] == "unet" and not cfg["detector"].get("checkpoint"):
         p.error("--detector unet needs --checkpoint or detector.checkpoint in config")
+    if cfg["detector"]["name"] == "unet" and not Path(cfg["detector"]["checkpoint"]).exists():
+        p.error(
+            f"checkpoint not found: {cfg['detector']['checkpoint']} "
+            "(trained on another machine? copy the models/<run>/ folder here first)"
+        )
 
     if args.cmd == "label":
         labeler.serve(label_sites(cfg, vs), args.cells_file, args.port, not args.no_browser)

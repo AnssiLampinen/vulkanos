@@ -9,9 +9,15 @@ often shifted a few pixels from the imagery).
 
 The split is spatial: whole H3 cells go to train or val, so validation
 measures how the model does on ground it has not seen.
+
+With positives_everywhere, OSM buildings in the other (not complete) cells of
+the AOI are also used as "building" training pixels, while their background
+stays ignored: it may hide unmapped buildings, so it cannot be trusted as
+"not building". Validation is unchanged (complete val cells only).
 """
 
 import hashlib
+import json
 from pathlib import Path
 
 import geopandas as gpd
@@ -26,6 +32,7 @@ from .imagery import load_chip
 
 IGNORE = 255
 SPLITS = ("train", "val")
+POSITIVE_ONLY = "pos"  # pixel_split value: cell used for building pixels only (train)
 
 
 def split_of(cell_id: str, val_fraction: float, seed: int = 0) -> str:
@@ -46,13 +53,20 @@ def edge_band(buildings: np.ndarray, width_px: int) -> np.ndarray:
 def chip_labels(
     buildings: np.ndarray, valid: np.ndarray, pixel_split: np.ndarray, ignore_edge_px: int
 ) -> dict[str, np.ndarray]:
-    """Label mask per split for one chip. pixel_split holds "train", "val" or ""."""
+    """Label mask per split for one chip.
+
+    pixel_split holds "train", "val", POSITIVE_ONLY or "" (unused). POSITIVE_ONLY
+    pixels add their buildings to the train mask and leave background ignored.
+    """
     base = buildings.astype(np.uint8)
     unusable = ~valid | edge_band(buildings, ignore_edge_px)
     out = {}
     for split in SPLITS:
         mask = base.copy()
-        mask[unusable | (pixel_split != split)] = IGNORE
+        labelled = pixel_split == split
+        if split == "train":
+            labelled = labelled | ((pixel_split == POSITIVE_ONLY) & buildings)
+        mask[unusable | ~labelled] = IGNORE
         out[split] = mask
     return out
 
@@ -71,18 +85,22 @@ def build_dataset(
     ignore_edge_px: int,
     seed: int = 0,
     min_labelled_frac: float = 0.05,
+    positives_everywhere: bool = False,
 ) -> pd.DataFrame:
     """Write images and masks for each (site id, chips, OSM buildings).
 
     complete_cells=None treats every cell of every site as complete.
+    positives_everywhere also uses buildings from the other cells (see module doc).
     Returns the index table, also written to out_dir/index.csv.
     """
     rows = []
     split_rows = []
     for site, chips, osm in sites:
         cells = all_cells[site] if complete_cells is None else all_cells[site] & complete_cells
-        cell_split = {c: split_of(c, val_fraction, seed) for c in cells}
+        cell_split = {c: split_of(c, val_fraction, seed) for c in sorted(cells)}
         split_rows += [{"site": site, "cell_id": c, "split": s} for c, s in cell_split.items()]
+        if positives_everywhere:
+            cell_split.update({c: POSITIVE_ONLY for c in all_cells[site] - cells})
         osm_3857 = osm.to_crs(3857)
 
         for chip in chips:
@@ -123,4 +141,13 @@ def build_dataset(
     splits.to_csv(out_dir / "cell_split.csv", index=False)
     val_cells = splits.loc[splits["split"] == "val", "cell_id"] if len(splits) else []
     (out_dir / "val_cells.txt").write_text("".join(f"{c}\n" for c in val_cells))
+    info = {
+        "sites": [site for site, _, _ in sites],
+        "complete_cells": "all" if complete_cells is None else len(splits),
+        "positives_everywhere": positives_everywhere,
+        "val_fraction": val_fraction,
+        "ignore_edge_px": ignore_edge_px,
+        "seed": seed,
+    }
+    (out_dir / "dataset_info.json").write_text(json.dumps(info, indent=2))
     return index

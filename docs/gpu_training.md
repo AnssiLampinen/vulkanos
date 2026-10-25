@@ -62,8 +62,20 @@ python -m vulkanos dataset --site goma --site ercolano --cells-file labels/compl
 ```
 
 Writes `data/train/`: images, `masks_train/`, `masks_val/`, `index.csv`,
-`cell_split.csv` and `val_cells.txt`. 20% of the cells are held out for
-validation, whole cells at a time.
+`cell_split.csv`, `val_cells.txt` and `dataset_info.json`. 20% of the cells
+are held out for validation, whole cells at a time.
+
+Add `--positives-everywhere` to also train on the OSM buildings outside the
+complete cells. Their background stays ignored, because it may contain
+unmapped buildings. This gives many more building examples with the same
+labelling effort; validation still uses only the complete held-out cells, so
+results are directly comparable with a dataset built without the flag. Use a
+separate `--out` folder to keep both:
+
+```bash
+python -m vulkanos dataset --site ercolano --cells-file labels/complete_cells.txt \
+    --positives-everywhere --out data/train_ercolano_pos
+```
 
 ## 5. Train
 
