@@ -10,8 +10,9 @@ from branca.element import Element
 from PIL import Image
 
 from compare import chip_masks, house_edges, split_houses
-from data import load_chip
+from data import frame, load_tile, tile_path
 
+FRAME_ZOOM = 16  # about 2 m/px, a 10 km frame stays under 6000 px
 ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 
 LEGEND = """
@@ -87,18 +88,20 @@ def to_layer(img, chips, fmt, **kw):
     return url, [[se.south, nw.west], [nw.north, se.east]]
 
 
-def imagery(cfg, chips, max_px=8192):
-    # the downloaded tiles as one image, so there is a background even when esri doesn't load
-    size = 256 * cfg["imagery"]["chip_tiles"]
-    x0, y0, nx, ny, step = grid(chips, size, max_px)
-    cs = size // step
-    img = np.zeros((ny * cs, nx * cs, 4), np.uint8)
-    for chip in chips:
-        rgb, valid = load_chip(cfg, chip)
-        r, c = (chip.y - y0) * cs, (chip.x - x0) * cs
-        img[r:r + cs, c:c + cs, :3] = rgb[::step, ::step]
-        img[r:r + cs, c:c + cs, 3] = valid[::step, ::step] * 255
-    return to_layer(img, chips, "WEBP", quality=80)
+def imagery(cfg, s):
+    # the whole map frame from low zoom tiles, so there is a background even when esri doesn't load
+    tiles = list(mercantile.tiles(*frame(s, cfg["map_km"]), zooms=FRAME_ZOOM))
+    x0, y0 = min(t.x for t in tiles), min(t.y for t in tiles)
+    nx, ny = max(t.x for t in tiles) - x0 + 1, max(t.y for t in tiles) - y0 + 1
+    img = np.zeros((ny * 256, nx * 256, 4), np.uint8)
+    for t in tiles:
+        rgb = load_tile(tile_path(cfg, t))
+        if rgb is None:
+            continue
+        r, c = (t.y - y0) * 256, (t.x - x0) * 256
+        img[r:r + 256, c:c + 256, :3] = rgb
+        img[r:r + 256, c:c + 256, 3] = 255
+    return to_layer(img, tiles, "WEBP", quality=80)
 
 
 def outlines(cfg, chips, osm, pred_dir, max_px=8192):
@@ -124,7 +127,7 @@ def outlines(cfg, chips, osm, pred_dir, max_px=8192):
     return to_layer(img, chips, "PNG", optimize=True)
 
 
-def cell_map(scored, site, out, overlay=None, imagery=None, outlines=None, tiles=None):
+def cell_map(scored, site, out, overlay=None, imagery=None, outlines=None, tiles=None, bounds=None):
     gdf = scored.copy()
     for c in ["completeness", "house_completeness", "missed_m2", "pred_m2", "osm_m2", "recall_vs_osm",
               "imagery_coverage"]:
@@ -168,5 +171,7 @@ def cell_map(scored, site, out, overlay=None, imagery=None, outlines=None, tiles
     folium.Marker([site["lat"], site["lon"]], tooltip=site["name"]).add_to(m)
     colors.add_to(m)
     folium.LayerControl().add_to(m)
+    if bounds:
+        m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
     out.parent.mkdir(parents=True, exist_ok=True)
     m.save(str(out))

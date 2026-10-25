@@ -35,6 +35,13 @@ def h3_cells(site, radius_km, res):
                             geometry=polys, crs="EPSG:4326")
 
 
+def frame(site, km):
+    # west, south, east, north of a km x km square around the site
+    lons, lats, _ = geod.fwd(np.full(4, site["lon"]), np.full(4, site["lat"]), [0, 90, 180, 270],
+                             np.full(4, km * 1000.0 / 2))
+    return lons[3], lats[2], lons[1], lats[0]
+
+
 def chips(cells, zoom, chip_tiles):
     # a chip is the parent tile of chip_tiles x chip_tiles imagery tiles
     area = cells.union_all()
