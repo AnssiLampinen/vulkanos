@@ -88,6 +88,7 @@ def run_volcano(cfg: dict, v: Volcano, steps: list[str], radius_km: float) -> No
             cmp_cfg["osm_buffer_m"],
             cmp_cfg["min_object_m2"],
             cmp_cfg["block_px"],
+            cmp_cfg.get("house_min_sep_m", 4.0),
         )
         scored = cells.merge(compare.add_scores(sums, cmp_cfg["low_signal_m2"]), on="cell_id", how="left")
         scored["detector"] = tag
@@ -96,6 +97,13 @@ def run_volcano(cfg: dict, v: Volcano, steps: list[str], radius_km: float) -> No
         print(
             f"[{v.id}] compare: {len(scored)} cells, {len(ok)} with signal, "
             f"median completeness {ok['completeness'].median():.2f} ({time.time() - t0:.0f}s)"
+        )
+        summary = compare.area_summary(scored).iloc[0]
+        print(
+            f"[{v.id}] area: completeness {summary['completeness']:.2f} by m2, "
+            f"{summary['house_completeness']:.2f} by houses "
+            f"({summary['unmapped_houses']}/{summary['houses']} houses unmapped, "
+            f"imagery coverage {summary['coverage']:.2f})"
         )
 
     if "report" in steps:
@@ -112,6 +120,7 @@ def run_volcano(cfg: dict, v: Volcano, steps: list[str], radius_km: float) -> No
                 osm_buffer_m=cmp_cfg["osm_buffer_m"],
                 min_object_m2=cmp_cfg["min_object_m2"],
             ),
+            house_min_sep_m=cmp_cfg.get("house_min_sep_m", 4.0),
         )
         out = report.cell_map(
             scored, v, cfg["data_dir"] / "out" / f"{v.id}_{tag}.html", overlay
@@ -129,6 +138,7 @@ def combine(cfg: dict, vs: list[Volcano], tag: str) -> gpd.GeoDataFrame | None:
     out = cfg["data_dir"] / "out" / f"{tag}_cells_scored_{name}.parquet"
     out.parent.mkdir(parents=True, exist_ok=True)
     combined.to_parquet(out)
+    compare.area_summary(combined).to_csv(out.parent / f"{tag}_area_summary_{name}.csv")
     return combined
 
 
