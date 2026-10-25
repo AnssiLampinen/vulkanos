@@ -90,7 +90,8 @@ def run(cfg, s, steps, radius):
 
     if "report" in steps:
         out = cfg["data_dir"] / "out" / f"{s['id']}_{tag}.html"
-        report.cell_map(gpd.read_parquet(scored_path(cfg, s)), s, out, report.overlay(cfg, chips, osm, preds))
+        report.cell_map(gpd.read_parquet(scored_path(cfg, s)), s, out, report.overlay(cfg, chips, osm, preds),
+                        report.imagery(cfg, chips), report.outlines(cfg, chips, osm, preds))
         print(f"[{s['id']}] map in {out}")
 
 
