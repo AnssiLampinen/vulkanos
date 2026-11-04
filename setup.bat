@@ -1,11 +1,11 @@
 @echo off
 rem Make .venv with CUDA torch and the rest of requirements.txt, then check the GPU.
-rem   setup.bat           CUDA 12.6 wheels, needs nvidia driver >= 560 (nvidia-smi shows it)
-rem   setup.bat cu118     older drivers
+rem   setup.bat           CUDA 12.8 wheels, needed for RTX 50xx (Blackwell), driver >= 570
+rem   setup.bat cu126     older drivers (>= 560), not for RTX 50xx
 rem   setup.bat cpu       no GPU
 cd /d "%~dp0"
 set CUDA=%1
-if "%CUDA%"=="" set CUDA=cu126
+if "%CUDA%"=="" set CUDA=cu128
 if not exist .venv python -m venv .venv || exit /b 1
 call .venv\Scripts\activate.bat
 python -m pip install -U pip

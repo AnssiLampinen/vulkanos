@@ -52,7 +52,7 @@ multiplier for the combined ranking) and `unmapped_houses_est`. The map has a Ma
 ## Running on a GPU machine
 
 ```
-bash setup.sh                 # Linux, or setup.bat on Windows. CUDA=cu118 / setup.bat cu118 for old drivers
+bash setup.sh                 # Linux, or setup.bat on Windows. default CUDA 12.8 wheels (RTX 50xx needs them), CUDA=cu126 / setup.bat cu126 for older drivers
 . .venv/bin/activate          # .venv\Scripts\activate.bat on Windows
 python scripts/gpu_run.py     # 10 sites with the ercolano r34 unet
 ```
