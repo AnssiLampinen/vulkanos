@@ -57,6 +57,11 @@ def get_osm(cfg, s, refresh=False):
     return gpd.read_parquet(path)
 
 
+def prioritise(cfg, scored):
+    c = cfg["compare"]
+    return compare.add_priority(scored, c.get("detector_fp", 0.029), c.get("concentration", 30), c.get("ok_gap", 0.1))
+
+
 def run(cfg, s, steps, radius):
     cells = get_cells(cfg, s, radius)
     zoom = cfg["imagery"]["zoom"]
@@ -84,6 +89,7 @@ def run(cfg, s, steps, radius):
     if "compare" in steps:
         sums = compare.score_chips(cfg, chips, set(cells["cell_id"]), osm, preds)
         scored = cells.merge(compare.add_scores(sums, cfg["compare"]["low_signal_m2"]), on="cell_id", how="left")
+        scored = prioritise(cfg, scored)
         scored["detector"] = tag
         scored.to_parquet(scored_path(cfg, s))
         ok = scored[(scored["low_signal"] == False) & (scored["no_imagery"] == False)]
@@ -92,13 +98,16 @@ def run(cfg, s, steps, radius):
         a = compare.area_summary(scored).iloc[0]
         print(f"[{s['id']}] whole area completeness {a['completeness']:.2f} by m2, {a['house_completeness']:.2f} "
               f"by houses, {a['unmapped_houses']} of {a['houses']} houses not in osm")
+        print(f"[{s['id']}] cells most in need of mapping:")
+        print(compare.top_cells(scored, 10).round(2).to_string(index=False))
 
     if "report" in steps:
         out = cfg["data_dir"] / "out" / f"{s['id']}_{tag}.html"
         # relative so the map in data/out finds them, forward slashes for windows
         tiles = os.path.relpath(cfg["data_dir"] / "tiles" / cfg["imagery"]["provider"], out.parent)
         tiles = tiles.replace("\\", "/") + "/{z}/{x}/{y}.jpg"
-        report.cell_map(gpd.read_parquet(scored_path(cfg, s)), s, out, report.overlay(cfg, chips, osm, preds),
+        # priority again so changed detector_fp / concentration / ok_gap show up without running compare
+        report.cell_map(prioritise(cfg, gpd.read_parquet(scored_path(cfg, s))), s, out, report.overlay(cfg, chips, osm, preds),
                         report.imagery(cfg, s), report.outlines(cfg, chips, osm, preds), tiles,
                         data.frame(s, cfg["map_km"]))
         print(f"[{s['id']}] map in {out}")
@@ -169,6 +178,7 @@ def main():
         if args.suggest:
             print(compare.suggest_cells(scored, args.suggest).to_string(index=False))
         print(compare.detector_metrics(scored, label.read_cells(args.cells)).to_string())
+        print("mapping priority null fitted on these cells:", compare.fit_null(scored, label.read_cells(args.cells)))
 
     elif args.cmd == "label":
         page = []

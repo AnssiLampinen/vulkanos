@@ -40,6 +40,15 @@ python src/main.py volcanoes
 The volcano grids are centred on the summit, so after changing one make the grid again with
 `--radius`. Every cell gets `volcano_dist_km`, the distance to the summit, also for test sites.
 
+## Mapping priority
+
+`compare` ranks cells by how sure we are that OSM misses houses there, not by the raw count: 2 of 2
+houses unmapped is weak evidence, 300 of 500 is strong. Each cell gets a one-sided beta-binomial test
+against "OSM misses at most `ok_gap` of the houses here", with the detector's false positives
+(`detector_fp`, `concentration`) fitted on the complete cells; `validate` prints the fit. Columns:
+`gap_p`, `gap_significance` (-log10 p, the ranking key), `mapping_priority` (1 - p, the 0..1
+multiplier for the combined ranking) and `unmapped_houses_est`. The map has a Mapping priority layer.
+
 ## Training our own detector
 
 Get tiles and OSM for the training sites:
