@@ -37,14 +37,17 @@ compare:
   min_blob_prob: 0.8  # green blobs with a lower mean probability are dropped, 0 turns it off
   ragged_holes: 5  # green blobs with this many holes and jagged edges are dropped (scrub, bare ground), 0 turns it off
 
-volcanoes:
-  - {id: vesuvius, name: Vesuvius, lat: 40.821, lon: 14.426}
-  - {id: merapi, name: Merapi, lat: -7.540, lon: 110.446}
-  - {id: nyiragongo, name: Nyiragongo, lat: -1.520, lon: 29.250}
-  - {id: fuego, name: Fuego, lat: 14.473, lon: -90.880}
-  - {id: taal, name: Taal, lat: 14.002, lon: 120.993}
+volcanoes_file: volcanoes.yaml  # summit coordinates, edit there
 
-# small towns for testing
+# grids around the volcano summits, coordinates come from volcanoes_file
+volcanoes:
+  - {id: vesuvius}
+  - {id: merapi}
+  - {id: nyiragongo}
+  - {id: fuego}
+  - {id: taal}
+
+# small towns for testing, volcano is the id in volcanoes_file
 test_sites:
-  - {id: ercolano, name: Ercolano, lat: 40.806, lon: 14.349}
-  - {id: goma, name: Goma, lat: -1.670, lon: 29.230}
+  - {id: ercolano, name: Ercolano, lat: 40.806, lon: 14.349, volcano: vesuvius}
+  - {id: goma, name: Goma, lat: -1.670, lon: 29.230, volcano: nyiragongo}
