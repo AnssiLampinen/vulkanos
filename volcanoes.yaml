@@ -1,0 +1,47 @@
+# Summit coordinates of each volcano, used for distance to the volcano.
+#
+# The coordinate used is the first one that is set:
+#   1. lat/lon at the top of an entry: set these by hand to override everything else
+#   2. osm: the summit node in OpenStreetMap (natural=volcano, else the highest natural=peak near the
+#      gvp point), filled in by `python src/main.py volcanoes`
+#   3. gvp: Smithsonian Global Volcanism Program, https://volcano.si.edu/volcano.cfm?vn=<number>
+#
+# GVP gives coordinates to 0.001 deg (about 100 m), OSM summit nodes are usually placed within a few
+# metres, so OSM wins over GVP when it is there. `volcanoes` only rewrites the osm: lines.
+#
+# Test sites point at their volcano with `volcano:` in config.yaml.
+
+vesuvius:
+  name: Vesuvius
+  lat:
+  lon:
+  gvp: {number: 211020, lat: 40.821, lon: 14.426, elev_m: 1281}
+  osm: {node: null, lat: null, lon: null, ele: null}
+
+merapi:
+  name: Merapi
+  lat:
+  lon:
+  gvp: {number: 263250, lat: -7.540, lon: 110.446, elev_m: 2910}
+  osm: {node: null, lat: null, lon: null, ele: null}
+
+nyiragongo:
+  name: Nyiragongo
+  lat:
+  lon:
+  gvp: {number: 223030, lat: -1.520, lon: 29.250, elev_m: 3470}
+  osm: {node: null, lat: null, lon: null, ele: null}
+
+fuego:
+  name: Fuego
+  lat:
+  lon:
+  gvp: {number: 342090, lat: 14.473, lon: -90.880, elev_m: 3763}
+  osm: {node: null, lat: null, lon: null, ele: null}
+
+taal:
+  name: Taal
+  lat:
+  lon:
+  gvp: {number: 273070, lat: 14.002, lon: 120.993, elev_m: 311}
+  osm: {node: null, lat: null, lon: null, ele: null}

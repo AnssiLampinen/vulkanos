@@ -22,7 +22,7 @@ white lines: cuts between houses
 </div>
 """
 
-FIELDS = ["cell_id", "dist_km", "completeness", "missed_m2", "pred_m2", "osm_m2", "pred_count", "unmatched_count",
+FIELDS = ["cell_id", "dist_km", "volcano_dist_km", "completeness", "missed_m2", "pred_m2", "osm_m2", "pred_count", "unmatched_count",
           "house_completeness", "house_count", "house_unmatched_count", "osm_house_count", "recall_vs_osm",
           "imagery_coverage"]
 
@@ -97,6 +97,10 @@ def cell_map(scored, site, out, overlay=None):
                                           zindex=500).add_to(m)
         m.get_root().html.add_child(Element(LEGEND))
     folium.Marker([site["lat"], site["lon"]], tooltip=site["name"]).add_to(m)
+    v = site["volcano"]
+    if (v["lat"], v["lon"]) != (site["lat"], site["lon"]):
+        folium.Marker([v["lat"], v["lon"]], tooltip=f"{v['name']} summit ({v['source']})",
+                      icon=folium.Icon(color="red", icon="caret-up", prefix="fa")).add_to(m)
     colors.add_to(m)
     folium.LayerControl().add_to(m)
     out.parent.mkdir(parents=True, exist_ok=True)
