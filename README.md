@@ -26,6 +26,20 @@ Steps are tiles, detect, osm, compare and report, all of them by default. The gr
 run with radius_km from config.yaml, `--radius` makes it again. Everything goes to `data/<site>/` and
 the map to `data/out/<site>_<detector>.html`. Without `--site` it runs all the volcanoes.
 
+## Volcano coordinates
+
+Summits are in `volcanoes.yaml`. Each volcano has the Smithsonian GVP coordinates, an `osm:` line
+for the OpenStreetMap summit node and an empty `lat`/`lon` to set by hand. The first one that is set
+wins: hand-set, then OSM, then GVP. Fill in the OSM lines (only those lines get rewritten) and print
+what is used with
+
+```
+python src/main.py volcanoes
+```
+
+The volcano grids are centred on the summit, so after changing one make the grid again with
+`--radius`. Every cell gets `volcano_dist_km`, the distance to the summit, also for test sites.
+
 ## Training our own detector
 
 Get tiles and OSM for the training sites:

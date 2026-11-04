@@ -12,6 +12,7 @@ import data
 import detect
 import label
 import report
+import volcanoes
 
 STEPS = ["tiles", "detect", "osm", "compare", "report"]
 
@@ -38,7 +39,8 @@ def get_cells(cfg, s, radius=None):
         cells = data.h3_cells(s, radius, cfg["h3_res"])
         cells.to_parquet(path)
         print(f"[{s['id']}] {len(cells)} cells within {radius} km")
-    return gpd.read_parquet(path)
+    # computed on every load so a changed summit in volcanoes.yaml shows up without a new grid
+    return data.add_volcano_dist(gpd.read_parquet(path), s["volcano"])
 
 
 def get_osm(cfg, s, refresh=False):
@@ -96,7 +98,7 @@ def run(cfg, s, steps, radius):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("cmd", choices=["run", "validate", "label", "dataset", "train"])
+    p.add_argument("cmd", choices=["run", "validate", "label", "dataset", "train", "volcanoes"])
     p.add_argument("--config", default="config.yaml")
     p.add_argument("--site", action="append", help="volcano or test site id, default all volcanoes")
     p.add_argument("--step", action="append", choices=STEPS, help="default all steps")
@@ -126,13 +128,27 @@ def main():
         cfg["training"]["batch_size"] = args.batch_size
     dataset_dir = args.dataset or Path(cfg["training"]["dataset_dir"])
 
+    vfile = cfg.get("volcanoes_file", "volcanoes.yaml")
+    if args.cmd == "volcanoes":
+        volcanoes.refresh_osm(vfile, cfg["data_dir"] / "osm_cache", args.site)
+    summits = volcanoes.load(vfile)
+    for s in cfg["volcanoes"]:
+        v = summits[s["id"]]
+        s.update({"name": s.get("name", v["name"]), "lat": v["lat"], "lon": v["lon"], "volcano": v})
+    for s in cfg["test_sites"]:
+        s["volcano"] = summits[s["volcano"]]
+
     all_sites = {s["id"]: s for s in cfg["volcanoes"] + cfg["test_sites"]}
     for i in args.site or []:
         if i not in all_sites:
             sys.exit(f"unknown site {i}")
     sites = [all_sites[i] for i in args.site] if args.site else cfg["volcanoes"]
 
-    if args.cmd == "run":
+    if args.cmd == "volcanoes":
+        for v in summits.values():
+            print(f"{v['id']:12} {v['lat']:10.6f} {v['lon']:11.6f}  {v['source']}")
+
+    elif args.cmd == "run":
         for s in sites:
             run(cfg, s, args.step or STEPS, args.radius)
 

@@ -35,6 +35,15 @@ def h3_cells(site, radius_km, res):
                             geometry=polys, crs="EPSG:4326")
 
 
+def add_volcano_dist(cells, volcano):
+    # distance from each cell centre to the volcano summit
+    centres = [h3.cell_to_latlng(c) for c in cells["cell_id"]]
+    _, _, dist = geod.inv(np.full(len(cells), volcano["lon"]), np.full(len(cells), volcano["lat"]),
+                          [c[1] for c in centres], [c[0] for c in centres])
+    cells["volcano_dist_km"] = np.round(np.asarray(dist) / 1000, 3)
+    return cells
+
+
 def chips(cells, zoom, chip_tiles):
     # a chip is the parent tile of chip_tiles x chip_tiles imagery tiles
     area = cells.union_all()
