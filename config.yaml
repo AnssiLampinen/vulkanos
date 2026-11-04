@@ -1,4 +1,5 @@
 data_dir: data
+device: auto  # auto, cuda, cuda:1, cpu, mps. --device overrides
 radius_km: 10
 map_km: 10  # the map shows this square around the site
 h3_res: 8
@@ -14,6 +15,7 @@ detector:
   conf: 0.25
   threshold: 0.5
   # checkpoint: models/r34/best.pt
+  batch_size: 16  # chips per gpu batch for our unet
 
 training:
   dataset_dir: data/train
@@ -52,6 +54,11 @@ volcanoes:
   - {id: nyiragongo}
   - {id: fuego}
   - {id: taal}
+  - {id: sakurajima}
+  - {id: mayon}
+  - {id: agung}
+  - {id: popocatepetl}
+  - {id: etna}
 
 # small towns for testing, volcano is the id in volcanoes_file
 test_sites:

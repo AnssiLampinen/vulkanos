@@ -49,6 +49,30 @@ against "OSM misses at most `ok_gap` of the houses here", with the detector's fa
 `gap_p`, `gap_significance` (-log10 p, the ranking key), `mapping_priority` (1 - p, the 0..1
 multiplier for the combined ranking) and `unmapped_houses_est`. The map has a Mapping priority layer.
 
+## Running on a GPU machine
+
+```
+bash setup.sh                 # Linux, or setup.bat on Windows. CUDA=cu118 / setup.bat cu118 for old drivers
+. .venv/bin/activate          # .venv\Scripts\activate.bat on Windows
+python scripts/gpu_run.py     # 10 sites with the ercolano r34 unet
+```
+
+`gpu_run.py` downloads `models/ercolano-r34/best.pt` from the GitHub release when it isn't there, then runs
+tiles, detect, osm, compare and report for each site with one log per site in `data/logs/`. A failing
+site is skipped. At the end `data/out/summary_<detector>.csv` has one row per site (completeness,
+unmapped houses, cells with mapping priority >= 0.95) and the maps are in `data/out/`.
+
+- `--site merapi --site taal` picks sites, `--radius 5` makes smaller grids (faster, chips grow with r^2)
+- `--train` first trains a new unet here (`--train-site`, `--epochs`, `--batch-size`, `--dataset-args
+  "--all-cells"`) and runs with `models/<name>/best.pt`
+- `--device cuda:1` picks the card, `--detect-batch` the chips per GPU batch, `--workers` the download threads
+- on a Slurm cluster: `sbatch scripts/slurm.sh --train`
+
+Most of the time goes to downloading the imagery (about 16k tiles per site at 10 km); detection on a GPU
+is a few minutes per site. Tiles are cached in `data/tiles`, so a second run only redoes what changed.
+Training uses bf16 on RTX 30xx and newer and fp16 on older cards. `main.py` takes `--device` too, and
+`python src/main.py summary --site a --site b --checkpoint ...` remakes the summary table.
+
 ## Training our own detector
 
 Get tiles and OSM for the training sites:

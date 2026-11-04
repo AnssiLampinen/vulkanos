@@ -89,6 +89,32 @@ def make_dataset(cfg, sites, complete, out_dir, positives_everywhere=False):
     return index
 
 
+def pick_device(name=None):
+    # name from --device / config: auto, cpu, cuda, cuda:1, mps
+    if name in (None, "", "auto"):
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            return torch.device("mps")
+        return torch.device("cpu")
+    return torch.device(name)
+
+
+def amp_dtype(device):
+    # bf16 on rtx 30xx and newer, fp16 (with a grad scaler) on older cuda cards, off on cpu
+    if device.type != "cuda":
+        return None
+    return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+
+
+def describe(device):
+    if device.type == "cuda":
+        i = device.index or 0
+        p = torch.cuda.get_device_properties(i)
+        return f"{device} ({p.name}, {p.total_memory / 2**30:.0f} GB, amp {amp_dtype(device)})"
+    return str(device)
+
+
 def make_model(encoder, weights="imagenet"):
     return smp.Unet(encoder_name=encoder, encoder_weights=weights, classes=1)
 
@@ -144,13 +170,13 @@ def masked_loss(logits, target):
 
 
 @torch.no_grad()
-def evaluate(model, loader, device, amp):
+def evaluate(model, loader, device, dtype):
     model.eval()
     tp = fp = fn = 0
     losses = []
     for x, y in loader:
-        x, y = x.to(device), y.to(device)
-        with torch.autocast(device.type, dtype=torch.bfloat16, enabled=amp):
+        x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
+        with torch.autocast(device.type, dtype=dtype, enabled=dtype is not None):
             logits = model(x)
         losses.append(masked_loss(logits, y).item())
         keep = y != IGNORE
@@ -170,9 +196,12 @@ def train(cfg, dataset_dir, out_dir):
     random.seed(tr["seed"])
     np.random.seed(tr["seed"])
     torch.manual_seed(tr["seed"])
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    amp = device.type == "cuda"  # bf16, needs an rtx 30xx or newer
-    print("device", device)
+    device = pick_device(cfg.get("device"))
+    dtype = amp_dtype(device)
+    amp = dtype is not None
+    print("device", describe(device))
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
 
     index = pd.read_csv(dataset_dir / "index.csv")
     train_ds = Chips(dataset_dir, index[index["split"] == "train"]["chip"].tolist(), "train", tr["crop"], True)
@@ -183,10 +212,12 @@ def train(cfg, dataset_dir, out_dir):
 
     bs = tr["batch_size"]
     train_dl = DataLoader(train_ds, bs, shuffle=True, num_workers=tr["workers"], pin_memory=amp,
+                          persistent_workers=tr["workers"] > 0,
                           drop_last=len(train_ds) > bs)
     val_dl = DataLoader(val_ds, bs, num_workers=tr["workers"], pin_memory=amp)
 
     model = make_model(tr["encoder"]).to(device)
+    scaler = torch.amp.GradScaler("cuda", enabled=dtype == torch.float16)
     opt = torch.optim.AdamW(model.parameters(), lr=tr["lr"], weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=tr["lr"], total_steps=tr["epochs"] * len(train_dl),
                                                 pct_start=0.05)
@@ -199,16 +230,17 @@ def train(cfg, dataset_dir, out_dir):
         t0 = time.time()
         losses = []
         for x, y in train_dl:
-            x, y = x.to(device), y.to(device)
-            with torch.autocast(device.type, dtype=torch.bfloat16, enabled=amp):
+            x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
+            with torch.autocast(device.type, dtype=dtype, enabled=amp):
                 loss = masked_loss(model(x), y)
             opt.zero_grad()
-            loss.backward()
-            opt.step()
+            scaler.scale(loss).backward()
+            scaler.step(opt)
+            scaler.update()
             sched.step()
             losses.append(loss.item())
 
-        m = evaluate(model, val_dl, device, amp)
+        m = evaluate(model, val_dl, device, dtype)
         m.update(epoch=epoch, train_loss=float(np.mean(losses)), seconds=round(time.time() - t0, 1))
         log.write(json.dumps(m) + "\n")
         log.flush()

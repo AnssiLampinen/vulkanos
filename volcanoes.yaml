@@ -45,3 +45,38 @@ taal:
   lon:
   gvp: {number: 273070, lat: 14.002, lon: 120.993, elev_m: 311}
   osm: {node: null, lat: null, lon: null, ele: null}
+
+sakurajima:
+  name: Sakurajima
+  lat:
+  lon:
+  gvp: {number: 282080, lat: 31.593, lon: 130.657, elev_m: 1117}
+  osm: {node: null, lat: null, lon: null, ele: null}
+
+mayon:
+  name: Mayon
+  lat:
+  lon:
+  gvp: {number: 273030, lat: 13.257, lon: 123.685, elev_m: 2462}
+  osm: {node: null, lat: null, lon: null, ele: null}
+
+agung:
+  name: Agung
+  lat:
+  lon:
+  gvp: {number: 264020, lat: -8.343, lon: 115.508, elev_m: 2997}
+  osm: {node: null, lat: null, lon: null, ele: null}
+
+popocatepetl:
+  name: Popocatépetl
+  lat:
+  lon:
+  gvp: {number: 341090, lat: 19.023, lon: -98.622, elev_m: 5393}
+  osm: {node: null, lat: null, lon: null, ele: null}
+
+etna:
+  name: Etna
+  lat:
+  lon:
+  gvp: {number: 211060, lat: 37.748, lon: 14.999, elev_m: 3357}
+  osm: {node: null, lat: null, lon: null, ele: null}

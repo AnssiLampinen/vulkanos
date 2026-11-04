@@ -1,4 +1,5 @@
 import argparse
+import traceback
 import os
 import sys
 import time
@@ -78,7 +79,7 @@ def run(cfg, s, steps, radius):
 
     if "detect" in steps:
         t0 = time.time()
-        done, skipped = detect.run_detection(cfg, detect.load_detector(cfg["detector"]), chips, preds)
+        done, skipped = detect.run_detection(cfg, detect.load_detector(cfg["detector"], cfg.get("device")), chips, preds)
         print(f"[{s['id']}] detected {done} new chips of {len(chips)} with {tag} ({time.time() - t0:.0f}s)")
         if skipped:
             print(f"[{s['id']}] skipped {skipped} chips with tiles not downloaded yet")
@@ -113,9 +114,38 @@ def run(cfg, s, steps, radius):
         print(f"[{s['id']}] map in {out}")
 
 
+def summary(cfg, sites):
+    # one row per site, to compare sites side by side
+    rows = []
+    for s in sites:
+        f = scored_path(cfg, s)
+        if not f.exists():
+            print(f"[{s['id']}] no scores yet")
+            continue
+        scored = prioritise(cfg, gpd.read_parquet(f))
+        a = compare.area_summary(scored).iloc[0].to_dict()
+        ok = scored[scored["no_imagery"] == False]
+        a.update(site=s["id"], name=s["name"], detector=detect.detector_tag(cfg["detector"]),
+                 unmapped_houses_est=int(ok["unmapped_houses_est"].sum()),
+                 cells_priority_95=int((ok["mapping_priority"] >= 0.95).sum()),
+                 mean_mapping_priority=ok["mapping_priority"].mean())
+        rows.append(a)
+    if not rows:
+        return None
+    first = ["site", "name", "detector"]
+    out = pd.DataFrame(rows)
+    out = out[first + [c for c in out.columns if c not in first]]
+    path = cfg["data_dir"] / "out" / f"summary_{detect.detector_tag(cfg['detector'])}.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    out.to_csv(path, index=False)
+    print(out.round(3).to_string(index=False))
+    print(f"summary in {path}")
+    return out
+
+
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("cmd", choices=["run", "validate", "label", "dataset", "train", "volcanoes"])
+    p.add_argument("cmd", choices=["run", "validate", "label", "dataset", "train", "volcanoes", "summary"])
     p.add_argument("--config", default="config.yaml")
     p.add_argument("--site", action="append", help="volcano or test site id, default all volcanoes")
     p.add_argument("--step", action="append", choices=STEPS, help="default all steps")
@@ -130,6 +160,10 @@ def main():
     p.add_argument("--name", default="r34", help="train: run name, saved to models/<name>")
     p.add_argument("--epochs", type=int)
     p.add_argument("--batch-size", type=int)
+    p.add_argument("--device", help="auto (default), cuda, cuda:1, cpu or mps")
+    p.add_argument("--workers", type=int, help="threads for tile downloads and chip loading")
+    p.add_argument("--detect-batch", type=int, help="chips per gpu batch when detecting, default 16")
+    p.add_argument("--stop-on-error", action="store_true", help="run: stop at the first failing site")
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--no-browser", action="store_true")
     args = p.parse_args()
@@ -139,6 +173,12 @@ def main():
     if args.checkpoint:
         cfg["detector"]["name"] = "unet"
         cfg["detector"]["checkpoint"] = args.checkpoint
+    if args.device:
+        cfg["device"] = args.device
+    if args.workers:
+        cfg["imagery"]["workers"] = args.workers
+    if args.detect_batch:
+        cfg["detector"]["batch_size"] = args.detect_batch
     if args.epochs:
         cfg["training"]["epochs"] = args.epochs
     if args.batch_size:
@@ -166,8 +206,24 @@ def main():
             print(f"{v['id']:12} {v['lat']:10.6f} {v['lon']:11.6f}  {v['source']}")
 
     elif args.cmd == "run":
+        failed = []
         for s in sites:
-            run(cfg, s, args.step or STEPS, args.radius)
+            try:
+                run(cfg, s, args.step or STEPS, args.radius)
+            except Exception:
+                # one bad site (osm timeout, no imagery) shouldn't stop an overnight run
+                if args.stop_on_error:
+                    raise
+                traceback.print_exc()
+                failed.append(s["id"])
+                print(f"[{s['id']}] FAILED, going on with the next site")
+        if len(sites) > 1:
+            summary(cfg, sites)
+        if failed:
+            sys.exit(f"failed sites: {' '.join(failed)}")
+
+    elif args.cmd == "summary":
+        summary(cfg, sites)
 
     elif args.cmd == "validate":
         files = [scored_path(cfg, s) for s in sites]
