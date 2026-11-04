@@ -23,7 +23,7 @@ white lines: cuts between houses
 """
 
 FIELDS = ["cell_id", "dist_km", "completeness", "missed_m2", "pred_m2", "osm_m2", "pred_count", "unmatched_count",
-          "house_completeness", "house_count", "house_unmatched_count", "osm_house_count", "recall_vs_osm",
+          "house_completeness", "house_count", "house_unmatched_count", "unmapped_houses_est", "gap_significance", "mapping_priority", "osm_house_count", "recall_vs_osm",
           "imagery_coverage"]
 
 
@@ -68,19 +68,22 @@ def overlay(cfg, chips, osm, pred_dir, max_px=8192):
 
 def cell_map(scored, site, out, overlay=None):
     gdf = scored.copy()
-    for c in ["completeness", "house_completeness", "missed_m2", "pred_m2", "osm_m2", "recall_vs_osm",
+    for c in ["completeness", "house_completeness", "unmapped_houses_est", "gap_significance", "mapping_priority", "missed_m2", "pred_m2", "osm_m2", "recall_vs_osm",
               "imagery_coverage"]:
         gdf[c] = gdf[c].round(2)
 
     colors = cm.LinearColormap(["#d7191c", "#fdae61", "#1a9641"], vmin=0, vmax=1)
     colors.caption = "OSM completeness (share of detected building area that is in OSM)"
 
-    def style_for(field):
+    need = cm.LinearColormap(["#ffffcc", "#fd8d3c", "#800026"], vmin=0, vmax=1)
+    need.caption = "Mapping priority (confidence that OSM misses more than ok_gap of the houses)"
+
+    def style_for(field, cmap=colors, grey_low_signal=True):
         def style(f):
             p = f["properties"]
-            if p["no_imagery"] or p["low_signal"] or p[field] is None:
+            if p["no_imagery"] or (grey_low_signal and p["low_signal"]) or p[field] is None:
                 return {"fillColor": "#999999", "fillOpacity": 0.15, "weight": 0.2, "color": "#666"}
-            return {"fillColor": colors(p[field]), "fillOpacity": 0.6, "weight": 0.2, "color": "#333"}
+            return {"fillColor": cmap(p[field]), "fillOpacity": 0.6, "weight": 0.2, "color": "#333"}
         return style
 
     m = folium.Map(location=[site["lat"], site["lon"]], zoom_start=12, tiles=None)
@@ -92,6 +95,12 @@ def cell_map(scored, site, out, overlay=None):
                               ("house_completeness", "Completeness (houses)", False)]:
         folium.GeoJson(gdf[FIELDS + ["low_signal", "no_imagery", "geometry"]], name=name, style_function=style_for(field),
                        tooltip=folium.GeoJsonTooltip(fields=FIELDS), show=show).add_to(m)
+    if "mapping_priority" in gdf:
+        # few houses already means low priority, so low signal cells are coloured too
+        folium.GeoJson(gdf[FIELDS + ["low_signal", "no_imagery", "geometry"]], name="Mapping priority",
+                       style_function=style_for("mapping_priority", need, False),
+                       tooltip=folium.GeoJsonTooltip(fields=FIELDS), show=False).add_to(m)
+        need.add_to(m)
     if overlay:
         folium.raster_layers.ImageOverlay(overlay[0], bounds=overlay[1], name="Detections vs OSM", interactive=False,
                                           zindex=500).add_to(m)

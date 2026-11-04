@@ -4,6 +4,7 @@ import h3
 import mercantile
 import numpy as np
 import pandas as pd
+from scipy.stats import betabinom
 from rasterio.features import rasterize
 from rasterio.transform import from_bounds
 from scipy import ndimage
@@ -230,6 +231,47 @@ def add_scores(df, low_signal_m2):
     df["low_signal"] = df["pred_m2"] < low_signal_m2
     df["no_imagery"] = df["imagery_coverage"].fillna(0) < 0.5
     return df
+
+
+def add_priority(scored, detector_fp, concentration, ok_gap):
+    # how sure are we that a cell really has houses missing from osm? 2 of 2 houses unmapped says little,
+    # 300 of 500 says a lot. one-sided test per cell against the null "osm misses at most ok_gap of the
+    # houses here". under the null a detected house shows up unmapped with mean rate p0, because the
+    # detector made it up (detector_fp) or osm misses it. detector errors cluster within a cell (one bad
+    # roof gets split into many houses), so the count is beta-binomial, not binomial: concentration is
+    # the beta's a + b, lower means more spread between cells. fit both with fit_null on complete cells
+    df = scored.copy()
+    ok = df["no_imagery"] == False
+    n = df["house_count"].fillna(0).round().astype(int)
+    k = df["house_unmatched_count"].fillna(0).round().astype(int)
+    p0 = detector_fp + (1 - detector_fp) * ok_gap
+    p = betabinom.sf(k - 1, n, p0 * concentration, (1 - p0) * concentration)  # P(at least k unmapped | null)
+    df["gap_p"] = np.clip(p, 1e-15, 1)  # sf isn't accurate below this
+    # ranking key, ties at the cap are broken by unmapped_houses_est in top_cells
+    df["gap_significance"] = -np.log10(df["gap_p"])
+    # 0..1 multiplier for the ranking formula: confidence that the cell is under-mapped
+    df["mapping_priority"] = 1 - df["gap_p"]
+    # houses really missing from osm, with the detector's false positives taken out
+    df["unmapped_houses_est"] = ((k - detector_fp * n) / (1 - detector_fp)).clip(lower=0)
+    df.loc[~ok, ["gap_p", "gap_significance", "mapping_priority", "unmapped_houses_est"]] = np.nan
+    return df
+
+
+def fit_null(scored, cells):
+    # on complete cells every unmapped detection is a detector error: their mean rate is detector_fp and
+    # the spread of the per-cell rates gives the beta-binomial concentration (method of moments)
+    sel = scored[scored["cell_id"].isin(cells) & (scored["house_count"] > 0)]
+    n, k = sel["house_count"], sel["house_unmatched_count"]
+    fp = k.sum() / n.sum()
+    var = np.average((k / n - fp) ** 2, weights=n) - fp * (1 - fp) / n.mean()  # minus binomial noise
+    conc = fp * (1 - fp) / var - 1 if var > 0 else float("inf")
+    return {"cells": len(sel), "detector_fp": round(float(fp), 4), "concentration": round(float(conc), 1)}
+
+
+def top_cells(scored, n):
+    cols = ["cell_id", "volcano", "dist_km", "house_count", "house_unmatched_count", "house_completeness",
+            "unmapped_houses_est", "gap_p", "gap_significance", "mapping_priority"]
+    return scored.sort_values(["gap_significance", "unmapped_houses_est"], ascending=False).head(n)[[c for c in cols if c in scored]]
 
 
 def area_summary(scored):

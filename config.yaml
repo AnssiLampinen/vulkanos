@@ -33,6 +33,12 @@ compare:
   low_signal_m2: 200  # cells with less detected area are greyed out
   block_px: 8
   house_min_sep_m: 4  # touching detections get split into houses at least this far apart
+  # mapping priority: beta-binomial test of each cell's unmapped houses against "osm is good enough here"
+  # detector_fp and concentration fitted on the 16 ercolano complete cells (validate prints them),
+  # 14 of those were r34 training cells so detector_fp is on the low side
+  detector_fp: 0.029  # share of detected houses that aren't in osm on complete cells
+  concentration: 30  # how much detector_fp varies between cells, lower is more spread
+  ok_gap: 0.1  # a cell counts as mapped well enough when osm misses at most this share of its houses
 
 volcanoes:
   - {id: vesuvius, name: Vesuvius, lat: 40.821, lon: 14.426}
