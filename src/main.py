@@ -152,6 +152,25 @@ def summary(cfg, sites):
     return out
 
 
+def slug(name):
+    # "Volcán Pichincha" -> volcan_pichincha, used as the site id and folder name
+    import re
+    import unicodedata
+
+    name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def csv_sites(path):
+    # name,lat,lon per row, the point is taken as the summit
+    out = []
+    for r in pd.read_csv(path).itertuples():
+        sid = slug(r.name)
+        v = {"id": sid, "name": r.name, "lat": float(r.lat), "lon": float(r.lon), "source": "csv"}
+        out.append({"id": sid, "name": r.name, "lat": v["lat"], "lon": v["lon"], "volcano": v})
+    return out
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("cmd", choices=["run", "validate", "label", "dataset", "train", "volcanoes", "summary"])
@@ -172,6 +191,7 @@ def main():
     p.add_argument("--device", help="auto (default), cuda, cuda:1, cpu or mps")
     p.add_argument("--workers", type=int, help="threads for tile downloads and chip loading")
     p.add_argument("--detect-batch", type=int, help="chips per gpu batch when detecting, default 16")
+    p.add_argument("--sites-csv", type=Path, help="extra sites from a name,lat,lon csv; without --site runs all of them")
     p.add_argument("--stop-on-error", action="store_true", help="run: stop at the first failing site")
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--no-browser", action="store_true")
@@ -204,11 +224,12 @@ def main():
     for s in cfg["test_sites"]:
         s["volcano"] = summits[s["volcano"]]
 
-    all_sites = {s["id"]: s for s in cfg["volcanoes"] + cfg["test_sites"]}
+    extra = csv_sites(args.sites_csv) if args.sites_csv else []
+    all_sites = {s["id"]: s for s in cfg["volcanoes"] + cfg["test_sites"] + extra}
     for i in args.site or []:
         if i not in all_sites:
-            sys.exit(f"unknown site {i}")
-    sites = [all_sites[i] for i in args.site] if args.site else cfg["volcanoes"]
+            sys.exit(f"unknown site {i}, known: {' '.join(all_sites)}")
+    sites = [all_sites[i] for i in args.site] if args.site else (extra or cfg["volcanoes"])
 
     if args.cmd == "volcanoes":
         for v in summits.values():

@@ -60,6 +60,8 @@ def fetch_model(path, url):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--site", action="append", help=f"default {' '.join(SITES)}")
+    p.add_argument("--sites-csv", help="name,lat,lon csv of extra sites; ids are the names in lower_snake_case")
+    p.add_argument("--list-sites", action="store_true", help="print the site ids (with --sites-csv) and stop")
     p.add_argument("--checkpoint", default="models/ercolano-r34/best.pt")
     p.add_argument("--model-url", default=MODEL_URL, help="where to get the checkpoint when it isn't on disk")
     p.add_argument("--train", action="store_true", help="train a new unet here first and use it")
@@ -75,8 +77,22 @@ def main():
     p.add_argument("--config", default="config.yaml")
     args = p.parse_args()
 
+    sys.path.insert(0, str(ROOT / "src"))
+    if args.sites_csv:
+        from main import csv_sites
+
+        csv_ids = [s["id"] for s in csv_sites(args.sites_csv)]
+        if args.list_sites:
+            print("\n".join(csv_ids))
+            return
+        sites = args.site or csv_ids
+    else:
+        sites = args.site or SITES
+
     check_gpu(args.device)
     common = ["--config", args.config, "--device", args.device, "--workers", str(args.workers)]
+    if args.sites_csv:
+        common += ["--sites-csv", str(Path(args.sites_csv).resolve())]
     logs = ROOT / "data" / "logs"
     ckpt = ROOT / args.checkpoint
 
@@ -99,14 +115,14 @@ def main():
 
     radius = ["--radius", str(args.radius)] if args.radius else []
     failed = []
-    for s in args.site or SITES:
+    for s in sites:
         cmd = MAIN + ["run", "--site", s, "--checkpoint", str(ckpt.relative_to(ROOT)),
                       "--detect-batch", str(args.detect_batch)] + radius + common
         if not step(s, cmd, logs / f"{s}.log"):
             failed.append(s)
 
     det = ["--checkpoint", str(ckpt.relative_to(ROOT))]
-    step("summary", MAIN + ["summary"] + [a for s in args.site or SITES for a in ("--site", s)] + det + common,
+    step("summary", MAIN + ["summary"] + [a for s in sites for a in ("--site", s)] + det + common,
          logs / "summary.log")
     print(f"\nmaps in data/out/, logs in {logs}")
     if failed:

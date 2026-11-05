@@ -62,6 +62,8 @@ tiles, detect, osm, compare and report for each site with one log per site in `d
 site is skipped. At the end `data/out/summary_<detector>.csv` has one row per site (completeness,
 unmapped houses, cells with mapping priority >= 0.95) and the maps are in `data/out/`.
 
+- `--sites-csv sites/volcanoes_30.csv` runs sites from a name,lat,lon csv (the point is the summit), `--list-sites`
+  prints their ids, add `--site gunung_merapi` for one of them
 - `--site merapi --site taal` picks sites, `--radius 5` makes smaller grids (faster, chips grow with r^2)
 - `--train` first trains a new unet here (`--train-site`, `--epochs`, `--batch-size`, `--dataset-args
   "--all-cells"`) and runs with `models/<name>/best.pt`
