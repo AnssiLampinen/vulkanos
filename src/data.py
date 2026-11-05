@@ -118,15 +118,31 @@ def load_chip(cfg, chip):
     return rgb, valid
 
 
-def fetch_osm(area, cache_dir):
+OVERPASS = ["https://overpass-api.de/api", "https://overpass.kumi.systems/api", "https://overpass.private.coffee/api"]
+
+
+def fetch_osm(area, cache_dir, tries=8):
     ox.settings.use_cache = True
     ox.settings.cache_folder = str(cache_dir)
     ox.settings.requests_timeout = 300
-    try:
-        gdf = ox.features_from_polygon(area, tags={"building": True})
-    except ox._errors.InsufficientResponseError:
-        # no buildings at all
-        return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+    # public overpass servers are often full (502/504/429): go round the mirrors, waiting longer each time.
+    # answers are cached, so a retry only redoes the parts that failed
+    for i in range(tries):
+        ox.settings.overpass_url = OVERPASS[i % len(OVERPASS)]
+        ox.settings.overpass_rate_limit = i % len(OVERPASS) == 0  # only overpass-api.de has /status
+        try:
+            gdf = ox.features_from_polygon(area, tags={"building": True})
+            break
+        except ox._errors.InsufficientResponseError:
+            # no buildings at all
+            return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+        except Exception as e:
+            if i == tries - 1:
+                raise
+            wait = min(30 * 2 ** i, 600)
+            print(f"  overpass {ox.settings.overpass_url} failed ({str(e).splitlines()[0][:100]}), "
+                  f"next mirror in {wait}s")
+            time.sleep(wait)
     gdf = gdf[gdf.geom_type.isin(["Polygon", "MultiPolygon"])].reset_index()
     gdf = gdf[[c for c in ["element", "id", "building"] if c in gdf.columns] + ["geometry"]].copy()
     gdf["fetched_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
