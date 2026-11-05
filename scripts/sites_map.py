@@ -22,7 +22,10 @@ def main():
     m = folium.Map(tiles=None, control_scale=True)
     folium.TileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
                      attr="Esri", name="Imagery", max_zoom=19).add_to(m)
-    folium.TileLayer("OpenStreetMap", name="OSM").add_to(m)
+    # tile.openstreetmap.org blocks pages opened from file://, carto and esri don't
+    folium.TileLayer("CartoDB Voyager", name="Streets (OSM)", max_zoom=20, show=False).add_to(m)
+    folium.TileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/"
+                     "MapServer/tile/{z}/{y}/{x}", attr="Esri", name="Place names", overlay=True).add_to(m)
     for g in pd.unique(sites["name"]):
         r = sites[sites["name"] == g].iloc[0]
         fg = folium.FeatureGroup(name=g).add_to(m)

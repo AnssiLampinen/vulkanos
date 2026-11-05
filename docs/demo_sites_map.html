@@ -17,7 +17,7 @@
             <meta name="viewport" content="width=device-width,
                 initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
             <style>
-                #map_ded76f8e7857afda15c0d054c742fb84 {
+                #map_5ce186d08a2f94abce5e0f1aafe28b36 {
                     position: relative;
                     width: 100.0%;
                     height: 100.0%;
@@ -54,14 +54,14 @@
 <body>
     
     
-            <div class="folium-map" id="map_ded76f8e7857afda15c0d054c742fb84" ></div>
+            <div class="folium-map" id="map_5ce186d08a2f94abce5e0f1aafe28b36" ></div>
         
 </body>
 <script>
     
     
-            var map_ded76f8e7857afda15c0d054c742fb84 = L.map(
-                "map_ded76f8e7857afda15c0d054c742fb84",
+            var map_5ce186d08a2f94abce5e0f1aafe28b36 = L.map(
+                "map_5ce186d08a2f94abce5e0f1aafe28b36",
                 {
                     center: [0.0, 0.0],
                     crs: L.CRS.EPSG3857,
@@ -73,13 +73,13 @@
 
                 }
             );
-            L.control.scale().addTo(map_ded76f8e7857afda15c0d054c742fb84);
+            L.control.scale().addTo(map_5ce186d08a2f94abce5e0f1aafe28b36);
 
             
 
         
     
-            var tile_layer_32bb93007e5e0e57d8d1a2d6b7102794 = L.tileLayer(
+            var tile_layer_6daee56d6d935fd3e08efd57bd0ace23 = L.tileLayer(
                 "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
                 {
   "minZoom": 0,
@@ -96,17 +96,34 @@
             );
         
     
-            tile_layer_32bb93007e5e0e57d8d1a2d6b7102794.addTo(map_ded76f8e7857afda15c0d054c742fb84);
+            tile_layer_6daee56d6d935fd3e08efd57bd0ace23.addTo(map_5ce186d08a2f94abce5e0f1aafe28b36);
         
     
-            var tile_layer_750b8ed4d2aa6ee54aec54e96faa7ee2 = L.tileLayer(
-                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+            var tile_layer_b52a65f9bade28396b75cf7128c21651 = L.tileLayer(
+                "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
                 {
   "minZoom": 0,
-  "maxZoom": 19,
-  "maxNativeZoom": 19,
+  "maxZoom": 20,
+  "maxNativeZoom": 20,
   "noWrap": false,
-  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors \u0026copy; \u003ca href=\"https://carto.com/attributions\"\u003eCARTO\u003c/a\u003e",
+  "subdomains": "abcd",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            var tile_layer_8b4fda97f15d0cbce1680612891730e6 = L.tileLayer(
+                "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": false,
+  "attribution": "Esri",
   "subdomains": "abc",
   "detectRetina": false,
   "tms": false,
@@ -116,40 +133,40 @@
             );
         
     
-            tile_layer_750b8ed4d2aa6ee54aec54e96faa7ee2.addTo(map_ded76f8e7857afda15c0d054c742fb84);
+            tile_layer_8b4fda97f15d0cbce1680612891730e6.addTo(map_5ce186d08a2f94abce5e0f1aafe28b36);
         
     
-            var feature_group_1dc6733d87c6411490172e89d2893a29 = L.featureGroup(
+            var feature_group_d8c301a187c0a1f772be4c776ce6a45c = L.featureGroup(
                 {
 }
             );
         
     
-            var marker_1108f93b0e63097c3194a9fa9ef5d6de = L.marker(
+            var marker_fc8b9aa6e90ed55c23d19db199be25bb = L.marker(
                 [40.821, 14.426],
                 {
 }
-            ).addTo(feature_group_1dc6733d87c6411490172e89d2893a29);
+            ).addTo(feature_group_d8c301a187c0a1f772be4c776ce6a45c);
         
     
-        var popup_cb8ffec872d7854352a5d49f68f95643 = L.popup({
+        var popup_516c4a55c7f952ef4d9050d5a154ec0e = L.popup({
   "maxWidth": 250,
 });
 
         
             
-                var html_b51341a64d34baa3f5c18de1c1b819f0 = $(`<div id="html_b51341a64d34baa3f5c18de1c1b819f0" style="width: 100.0%; height: 100.0%;"><b>Ercolano</b><br>40.82100, 14.42600<br><a href='https://www.google.com/maps/@40.821,14.426,14z/data=!3m1!1e3' target='_blank'>Google Maps</a></div>`)[0];
-                popup_cb8ffec872d7854352a5d49f68f95643.setContent(html_b51341a64d34baa3f5c18de1c1b819f0);
+                var html_215a67c0cf6908f33bf12544dd1ca504 = $(`<div id="html_215a67c0cf6908f33bf12544dd1ca504" style="width: 100.0%; height: 100.0%;"><b>Ercolano</b><br>40.82100, 14.42600<br><a href='https://www.google.com/maps/@40.821,14.426,14z/data=!3m1!1e3' target='_blank'>Google Maps</a></div>`)[0];
+                popup_516c4a55c7f952ef4d9050d5a154ec0e.setContent(html_215a67c0cf6908f33bf12544dd1ca504);
             
         
 
-        marker_1108f93b0e63097c3194a9fa9ef5d6de.bindPopup(popup_cb8ffec872d7854352a5d49f68f95643)
+        marker_fc8b9aa6e90ed55c23d19db199be25bb.bindPopup(popup_516c4a55c7f952ef4d9050d5a154ec0e)
         ;
 
         
     
     
-            marker_1108f93b0e63097c3194a9fa9ef5d6de.bindTooltip(
+            marker_fc8b9aa6e90ed55c23d19db199be25bb.bindTooltip(
                 `<div>
                      Ercolano
                  </div>`,
@@ -159,46 +176,46 @@
             );
         
     
-            var circle_ef7fdb910273feee66edfb50a21af9ce = L.circle(
+            var circle_48fa346d83d366fd888a70db55fe86f9 = L.circle(
                 [40.821, 14.426],
                 {"bubblingMouseEvents": true, "color": "yellow", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "yellow", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10000, "stroke": true, "weight": 2}
-            ).addTo(feature_group_1dc6733d87c6411490172e89d2893a29);
+            ).addTo(feature_group_d8c301a187c0a1f772be4c776ce6a45c);
         
     
-            feature_group_1dc6733d87c6411490172e89d2893a29.addTo(map_ded76f8e7857afda15c0d054c742fb84);
+            feature_group_d8c301a187c0a1f772be4c776ce6a45c.addTo(map_5ce186d08a2f94abce5e0f1aafe28b36);
         
     
-            var feature_group_8a6281e7a40004ec069e78691d4f9667 = L.featureGroup(
+            var feature_group_e432d37ba725730c3c989bbfab2a7559 = L.featureGroup(
                 {
 }
             );
         
     
-            var marker_c01cddaf61cc10823ec3f7533d43027d = L.marker(
+            var marker_28455fe684e0b733f1f4abd5993f6c57 = L.marker(
                 [-7.5412887, 110.4462006],
                 {
 }
-            ).addTo(feature_group_8a6281e7a40004ec069e78691d4f9667);
+            ).addTo(feature_group_e432d37ba725730c3c989bbfab2a7559);
         
     
-        var popup_05491546b13ae7a16d3e1aec4c9e4e43 = L.popup({
+        var popup_d53c31e51f1cefd18913e12a23520cae = L.popup({
   "maxWidth": 250,
 });
 
         
             
-                var html_164618b9707ec2db3dbf23195c397ddb = $(`<div id="html_164618b9707ec2db3dbf23195c397ddb" style="width: 100.0%; height: 100.0%;"><b>Gunung Merapi</b><br>-7.54129, 110.44620<br><a href='https://www.google.com/maps/@-7.5412887,110.4462006,14z/data=!3m1!1e3' target='_blank'>Google Maps</a></div>`)[0];
-                popup_05491546b13ae7a16d3e1aec4c9e4e43.setContent(html_164618b9707ec2db3dbf23195c397ddb);
+                var html_bbdfb0688998ed71468c3bbad640b45b = $(`<div id="html_bbdfb0688998ed71468c3bbad640b45b" style="width: 100.0%; height: 100.0%;"><b>Gunung Merapi</b><br>-7.54129, 110.44620<br><a href='https://www.google.com/maps/@-7.5412887,110.4462006,14z/data=!3m1!1e3' target='_blank'>Google Maps</a></div>`)[0];
+                popup_d53c31e51f1cefd18913e12a23520cae.setContent(html_bbdfb0688998ed71468c3bbad640b45b);
             
         
 
-        marker_c01cddaf61cc10823ec3f7533d43027d.bindPopup(popup_05491546b13ae7a16d3e1aec4c9e4e43)
+        marker_28455fe684e0b733f1f4abd5993f6c57.bindPopup(popup_d53c31e51f1cefd18913e12a23520cae)
         ;
 
         
     
     
-            marker_c01cddaf61cc10823ec3f7533d43027d.bindTooltip(
+            marker_28455fe684e0b733f1f4abd5993f6c57.bindTooltip(
                 `<div>
                      Gunung Merapi
                  </div>`,
@@ -208,46 +225,46 @@
             );
         
     
-            var circle_4e306389ff903102b5862652f93f2f3e = L.circle(
+            var circle_d74bd12b7bc854afd9b15047f170cdfc = L.circle(
                 [-7.5412887, 110.4462006],
                 {"bubblingMouseEvents": true, "color": "yellow", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "yellow", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10000, "stroke": true, "weight": 2}
-            ).addTo(feature_group_8a6281e7a40004ec069e78691d4f9667);
+            ).addTo(feature_group_e432d37ba725730c3c989bbfab2a7559);
         
     
-            feature_group_8a6281e7a40004ec069e78691d4f9667.addTo(map_ded76f8e7857afda15c0d054c742fb84);
+            feature_group_e432d37ba725730c3c989bbfab2a7559.addTo(map_5ce186d08a2f94abce5e0f1aafe28b36);
         
     
-            var feature_group_a62e9f1d8878c0e9385fce4ba4df9266 = L.featureGroup(
+            var feature_group_ff4d89c2bdb6f94be27dc5879da9f47b = L.featureGroup(
                 {
 }
             );
         
     
-            var marker_7d20f8d48c3b5829a4e767b8564af4cb = L.marker(
+            var marker_5b3b4951c23b011ce35630d45395da6e = L.marker(
                 [0.8098795, 127.3323425],
                 {
 }
-            ).addTo(feature_group_a62e9f1d8878c0e9385fce4ba4df9266);
+            ).addTo(feature_group_ff4d89c2bdb6f94be27dc5879da9f47b);
         
     
-        var popup_661a86d669f38b116538e51093644862 = L.popup({
+        var popup_0bbfe11c100d80940c262ff4cd886d2c = L.popup({
   "maxWidth": 250,
 });
 
         
             
-                var html_fb7d2a16aa4528befa1b6dc4311629df = $(`<div id="html_fb7d2a16aa4528befa1b6dc4311629df" style="width: 100.0%; height: 100.0%;"><b>Gunung Gamalama</b><br>0.80988, 127.33234<br><a href='https://www.google.com/maps/@0.8098795,127.3323425,14z/data=!3m1!1e3' target='_blank'>Google Maps</a></div>`)[0];
-                popup_661a86d669f38b116538e51093644862.setContent(html_fb7d2a16aa4528befa1b6dc4311629df);
+                var html_db295fa6195969aaf91d5376466e7951 = $(`<div id="html_db295fa6195969aaf91d5376466e7951" style="width: 100.0%; height: 100.0%;"><b>Gunung Gamalama</b><br>0.80988, 127.33234<br><a href='https://www.google.com/maps/@0.8098795,127.3323425,14z/data=!3m1!1e3' target='_blank'>Google Maps</a></div>`)[0];
+                popup_0bbfe11c100d80940c262ff4cd886d2c.setContent(html_db295fa6195969aaf91d5376466e7951);
             
         
 
-        marker_7d20f8d48c3b5829a4e767b8564af4cb.bindPopup(popup_661a86d669f38b116538e51093644862)
+        marker_5b3b4951c23b011ce35630d45395da6e.bindPopup(popup_0bbfe11c100d80940c262ff4cd886d2c)
         ;
 
         
     
     
-            marker_7d20f8d48c3b5829a4e767b8564af4cb.bindTooltip(
+            marker_5b3b4951c23b011ce35630d45395da6e.bindTooltip(
                 `<div>
                      Gunung Gamalama
                  </div>`,
@@ -257,46 +274,46 @@
             );
         
     
-            var circle_f41b64b8176b1ed1a6532283d1a4da30 = L.circle(
+            var circle_528d78badd2a078ae106cd8dfb02195b = L.circle(
                 [0.8098795, 127.3323425],
                 {"bubblingMouseEvents": true, "color": "yellow", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "yellow", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10000, "stroke": true, "weight": 2}
-            ).addTo(feature_group_a62e9f1d8878c0e9385fce4ba4df9266);
+            ).addTo(feature_group_ff4d89c2bdb6f94be27dc5879da9f47b);
         
     
-            feature_group_a62e9f1d8878c0e9385fce4ba4df9266.addTo(map_ded76f8e7857afda15c0d054c742fb84);
+            feature_group_ff4d89c2bdb6f94be27dc5879da9f47b.addTo(map_5ce186d08a2f94abce5e0f1aafe28b36);
         
     
-            var feature_group_2fa8f278c14e0fedae667ebe086bbc75 = L.featureGroup(
+            var feature_group_2fd06973a0127bb7428e8ffebc48f2a7 = L.featureGroup(
                 {
 }
             );
         
     
-            var marker_3b9129aadc0b5a0827d0d04c62cecb54 = L.marker(
+            var marker_ba5532d945bcf2c961ea0e973934422d = L.marker(
                 [1.2215268, -77.3589636],
                 {
 }
-            ).addTo(feature_group_2fa8f278c14e0fedae667ebe086bbc75);
+            ).addTo(feature_group_2fd06973a0127bb7428e8ffebc48f2a7);
         
     
-        var popup_7f1909f7a645da1c435c47f7e5efa08f = L.popup({
+        var popup_ccc070b787e1e0b5c94dbe8085144a19 = L.popup({
   "maxWidth": 250,
 });
 
         
             
-                var html_c2bc129ac9b4b9caa7486032a3a23a8c = $(`<div id="html_c2bc129ac9b4b9caa7486032a3a23a8c" style="width: 100.0%; height: 100.0%;"><b>Galeras</b><br>1.22153, -77.35896<br><a href='https://www.google.com/maps/@1.2215268,-77.3589636,14z/data=!3m1!1e3' target='_blank'>Google Maps</a></div>`)[0];
-                popup_7f1909f7a645da1c435c47f7e5efa08f.setContent(html_c2bc129ac9b4b9caa7486032a3a23a8c);
+                var html_78c6c5e0eaae29aa60ef63ca07f8dba7 = $(`<div id="html_78c6c5e0eaae29aa60ef63ca07f8dba7" style="width: 100.0%; height: 100.0%;"><b>Galeras</b><br>1.22153, -77.35896<br><a href='https://www.google.com/maps/@1.2215268,-77.3589636,14z/data=!3m1!1e3' target='_blank'>Google Maps</a></div>`)[0];
+                popup_ccc070b787e1e0b5c94dbe8085144a19.setContent(html_78c6c5e0eaae29aa60ef63ca07f8dba7);
             
         
 
-        marker_3b9129aadc0b5a0827d0d04c62cecb54.bindPopup(popup_7f1909f7a645da1c435c47f7e5efa08f)
+        marker_ba5532d945bcf2c961ea0e973934422d.bindPopup(popup_ccc070b787e1e0b5c94dbe8085144a19)
         ;
 
         
     
     
-            marker_3b9129aadc0b5a0827d0d04c62cecb54.bindTooltip(
+            marker_ba5532d945bcf2c961ea0e973934422d.bindTooltip(
                 `<div>
                      Galeras
                  </div>`,
@@ -306,46 +323,46 @@
             );
         
     
-            var circle_8ed7f88191dd5e30e821021195b32431 = L.circle(
+            var circle_69167d76178713c85ce914f225a8a84a = L.circle(
                 [1.2215268, -77.3589636],
                 {"bubblingMouseEvents": true, "color": "yellow", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "yellow", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10000, "stroke": true, "weight": 2}
-            ).addTo(feature_group_2fa8f278c14e0fedae667ebe086bbc75);
+            ).addTo(feature_group_2fd06973a0127bb7428e8ffebc48f2a7);
         
     
-            feature_group_2fa8f278c14e0fedae667ebe086bbc75.addTo(map_ded76f8e7857afda15c0d054c742fb84);
+            feature_group_2fd06973a0127bb7428e8ffebc48f2a7.addTo(map_5ce186d08a2f94abce5e0f1aafe28b36);
         
     
-            var feature_group_e58ef81502c1bc570073a4fb0a212655 = L.featureGroup(
+            var feature_group_d44aa9a33145532a6e583e453e70cde1 = L.featureGroup(
                 {
 }
             );
         
     
-            var marker_31d883d6f914fd947f9e6d3c228c6dcd = L.marker(
+            var marker_2fa868ffdf2ad321f3770720a1204ea3 = L.marker(
                 [-0.1657227, -78.6043435],
                 {
 }
-            ).addTo(feature_group_e58ef81502c1bc570073a4fb0a212655);
+            ).addTo(feature_group_d44aa9a33145532a6e583e453e70cde1);
         
     
-        var popup_168d26ce4dcb01335b087545d5acb6e4 = L.popup({
+        var popup_81bfde6975cf4a05bdb3134d42e414c7 = L.popup({
   "maxWidth": 250,
 });
 
         
             
-                var html_ff4177ca8671f0eef11c6b341ffe2073 = $(`<div id="html_ff4177ca8671f0eef11c6b341ffe2073" style="width: 100.0%; height: 100.0%;"><b>Volcán Pichincha</b><br>-0.16572, -78.60434<br><a href='https://www.google.com/maps/@-0.1657227,-78.6043435,14z/data=!3m1!1e3' target='_blank'>Google Maps</a></div>`)[0];
-                popup_168d26ce4dcb01335b087545d5acb6e4.setContent(html_ff4177ca8671f0eef11c6b341ffe2073);
+                var html_314a3e7d0d7aecfef7814624f727ee0f = $(`<div id="html_314a3e7d0d7aecfef7814624f727ee0f" style="width: 100.0%; height: 100.0%;"><b>Volcán Pichincha</b><br>-0.16572, -78.60434<br><a href='https://www.google.com/maps/@-0.1657227,-78.6043435,14z/data=!3m1!1e3' target='_blank'>Google Maps</a></div>`)[0];
+                popup_81bfde6975cf4a05bdb3134d42e414c7.setContent(html_314a3e7d0d7aecfef7814624f727ee0f);
             
         
 
-        marker_31d883d6f914fd947f9e6d3c228c6dcd.bindPopup(popup_168d26ce4dcb01335b087545d5acb6e4)
+        marker_2fa868ffdf2ad321f3770720a1204ea3.bindPopup(popup_81bfde6975cf4a05bdb3134d42e414c7)
         ;
 
         
     
     
-            marker_31d883d6f914fd947f9e6d3c228c6dcd.bindTooltip(
+            marker_2fa868ffdf2ad321f3770720a1204ea3.bindTooltip(
                 `<div>
                      Volcán Pichincha
                  </div>`,
@@ -355,46 +372,46 @@
             );
         
     
-            var circle_d2c662be82c8d305aa7fbe721e148574 = L.circle(
+            var circle_99719f605d93556b54065d8da4aca1ca = L.circle(
                 [-0.1657227, -78.6043435],
                 {"bubblingMouseEvents": true, "color": "yellow", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "yellow", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10000, "stroke": true, "weight": 2}
-            ).addTo(feature_group_e58ef81502c1bc570073a4fb0a212655);
+            ).addTo(feature_group_d44aa9a33145532a6e583e453e70cde1);
         
     
-            feature_group_e58ef81502c1bc570073a4fb0a212655.addTo(map_ded76f8e7857afda15c0d054c742fb84);
+            feature_group_d44aa9a33145532a6e583e453e70cde1.addTo(map_5ce186d08a2f94abce5e0f1aafe28b36);
         
     
-            var feature_group_d88e7c386ab02236e85743c1b4204f3e = L.featureGroup(
+            var feature_group_21594850e39064aa14a0f20cb8bf78b1 = L.featureGroup(
                 {
 }
             );
         
     
-            var marker_55c411ddf5e2240b8ee91cc6b297bcec = L.marker(
+            var marker_c248fa7c298b3b5bf5362d5db58eacc4 = L.marker(
                 [-4.2381767, 152.2092209],
                 {
 }
-            ).addTo(feature_group_d88e7c386ab02236e85743c1b4204f3e);
+            ).addTo(feature_group_21594850e39064aa14a0f20cb8bf78b1);
         
     
-        var popup_060be3a2df24949d6f026caf5e1816ec = L.popup({
+        var popup_4aef08a50154f7a3802e9c24ac4ca877 = L.popup({
   "maxWidth": 250,
 });
 
         
             
-                var html_657b70e7db655dc97ba04a6f6ba5d150 = $(`<div id="html_657b70e7db655dc97ba04a6f6ba5d150" style="width: 100.0%; height: 100.0%;"><b>Tavurvur</b><br>-4.23818, 152.20922<br><a href='https://www.google.com/maps/@-4.2381767,152.2092209,14z/data=!3m1!1e3' target='_blank'>Google Maps</a></div>`)[0];
-                popup_060be3a2df24949d6f026caf5e1816ec.setContent(html_657b70e7db655dc97ba04a6f6ba5d150);
+                var html_ec0b9df8165abe64b8df43e8d64c73f0 = $(`<div id="html_ec0b9df8165abe64b8df43e8d64c73f0" style="width: 100.0%; height: 100.0%;"><b>Tavurvur</b><br>-4.23818, 152.20922<br><a href='https://www.google.com/maps/@-4.2381767,152.2092209,14z/data=!3m1!1e3' target='_blank'>Google Maps</a></div>`)[0];
+                popup_4aef08a50154f7a3802e9c24ac4ca877.setContent(html_ec0b9df8165abe64b8df43e8d64c73f0);
             
         
 
-        marker_55c411ddf5e2240b8ee91cc6b297bcec.bindPopup(popup_060be3a2df24949d6f026caf5e1816ec)
+        marker_c248fa7c298b3b5bf5362d5db58eacc4.bindPopup(popup_4aef08a50154f7a3802e9c24ac4ca877)
         ;
 
         
     
     
-            marker_55c411ddf5e2240b8ee91cc6b297bcec.bindTooltip(
+            marker_c248fa7c298b3b5bf5362d5db58eacc4.bindTooltip(
                 `<div>
                      Tavurvur
                  </div>`,
@@ -404,44 +421,45 @@
             );
         
     
-            var circle_07877157eba45a19d0bc504c3ce6666f = L.circle(
+            var circle_5801ffdc0355043ee74fab4440f049f1 = L.circle(
                 [-4.2381767, 152.2092209],
                 {"bubblingMouseEvents": true, "color": "yellow", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "yellow", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10000, "stroke": true, "weight": 2}
-            ).addTo(feature_group_d88e7c386ab02236e85743c1b4204f3e);
+            ).addTo(feature_group_21594850e39064aa14a0f20cb8bf78b1);
         
     
-            feature_group_d88e7c386ab02236e85743c1b4204f3e.addTo(map_ded76f8e7857afda15c0d054c742fb84);
+            feature_group_21594850e39064aa14a0f20cb8bf78b1.addTo(map_5ce186d08a2f94abce5e0f1aafe28b36);
         
     
-            map_ded76f8e7857afda15c0d054c742fb84.fitBounds(
+            map_5ce186d08a2f94abce5e0f1aafe28b36.fitBounds(
                 [[-7.6412887, -78.7043435], [40.921, 152.30922089999999]],
                 {}
             );
         
     
-            var layer_control_217dff38a828e11d8336c320461f79d7_layers = {
+            var layer_control_c79ee1e2ce788322bd16ed7bc3e2f956_layers = {
                 base_layers : {
-                    "Imagery" : tile_layer_32bb93007e5e0e57d8d1a2d6b7102794,
-                    "OSM" : tile_layer_750b8ed4d2aa6ee54aec54e96faa7ee2,
+                    "Imagery" : tile_layer_6daee56d6d935fd3e08efd57bd0ace23,
+                    "Streets (OSM)" : tile_layer_b52a65f9bade28396b75cf7128c21651,
                 },
                 overlays :  {
-                    "Ercolano" : feature_group_1dc6733d87c6411490172e89d2893a29,
-                    "Gunung Merapi" : feature_group_8a6281e7a40004ec069e78691d4f9667,
-                    "Gunung Gamalama" : feature_group_a62e9f1d8878c0e9385fce4ba4df9266,
-                    "Galeras" : feature_group_2fa8f278c14e0fedae667ebe086bbc75,
-                    "Volc\u00e1n Pichincha" : feature_group_e58ef81502c1bc570073a4fb0a212655,
-                    "Tavurvur" : feature_group_d88e7c386ab02236e85743c1b4204f3e,
+                    "Place names" : tile_layer_8b4fda97f15d0cbce1680612891730e6,
+                    "Ercolano" : feature_group_d8c301a187c0a1f772be4c776ce6a45c,
+                    "Gunung Merapi" : feature_group_e432d37ba725730c3c989bbfab2a7559,
+                    "Gunung Gamalama" : feature_group_ff4d89c2bdb6f94be27dc5879da9f47b,
+                    "Galeras" : feature_group_2fd06973a0127bb7428e8ffebc48f2a7,
+                    "Volc\u00e1n Pichincha" : feature_group_d44aa9a33145532a6e583e453e70cde1,
+                    "Tavurvur" : feature_group_21594850e39064aa14a0f20cb8bf78b1,
                 },
             };
-            let layer_control_217dff38a828e11d8336c320461f79d7 = L.control.layers(
-                layer_control_217dff38a828e11d8336c320461f79d7_layers.base_layers,
-                layer_control_217dff38a828e11d8336c320461f79d7_layers.overlays,
+            let layer_control_c79ee1e2ce788322bd16ed7bc3e2f956 = L.control.layers(
+                layer_control_c79ee1e2ce788322bd16ed7bc3e2f956_layers.base_layers,
+                layer_control_c79ee1e2ce788322bd16ed7bc3e2f956_layers.overlays,
                 {
   "position": "topright",
   "collapsed": false,
   "autoZIndex": true,
 }
-            ).addTo(map_ded76f8e7857afda15c0d054c742fb84);
+            ).addTo(map_5ce186d08a2f94abce5e0f1aafe28b36);
 
         
 </script>
