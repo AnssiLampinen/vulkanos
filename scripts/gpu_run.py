@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = [sys.executable, "-u", str(ROOT / "src" / "main.py")]
 SITES = ["ercolano", "vesuvius", "merapi", "nyiragongo", "goma", "fuego", "taal", "sakurajima", "mayon", "agung"]
-MODEL_URL = "https://github.com/AnssiLampinen/vulkanos/releases/download/ercolano-r34/best.pt"
+MODEL_URL = "https://github.com/AnssiLampinen/vulkanos/raw/models/ercolano-r34/best.pt"
 
 
 def check_gpu(device):

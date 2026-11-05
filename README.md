@@ -57,7 +57,7 @@ bash setup.sh                 # Linux, or setup.bat on Windows. default CUDA 12.
 python scripts/gpu_run.py     # 10 sites with the ercolano r34 unet
 ```
 
-`gpu_run.py` downloads `models/ercolano-r34/best.pt` from the GitHub release when it isn't there, then runs
+`gpu_run.py` downloads `models/ercolano-r34/best.pt` from the `models` branch when it isn't there, then runs
 tiles, detect, osm, compare and report for each site with one log per site in `data/logs/`. A failing
 site is skipped. At the end `data/out/summary_<detector>.csv` has one row per site (completeness,
 unmapped houses, cells with mapping priority >= 0.95) and the maps are in `data/out/`.
