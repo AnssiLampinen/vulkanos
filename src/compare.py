@@ -305,7 +305,16 @@ def top_cells(scored, n):
     return scored.sort_values(["gap_significance", "unmapped_houses_est"], ascending=False).head(n)[[c for c in cols if c in scored]]
 
 
-def area_summary(scored):
+def readiness(scored, percentile=20, min_houses=1):
+    # site-wide mapping readiness: house_completeness of the cell worse than (100 - percentile)% of cells.
+    # a low percentile, so the badly mapped tail counts and not the average. a stray false positive cell
+    # only moves it if percentile% of cells are like that. min_houses 1 leaves out water and empty cells,
+    # raise it to also drop cells where a few false positives decide the score
+    ok = scored[(scored["no_imagery"] == False) & (scored["house_count"] >= min_houses)]
+    return ok.groupby("volcano")["house_completeness"].quantile(percentile / 100), ok.groupby("volcano").size()
+
+
+def area_summary(scored, percentile=20, min_houses=1, few_houses=10):
     # ratio of sums over cells with imagery, so empty cells don't pull it down
     ok = scored[scored["no_imagery"] == False]
     g = ok.groupby("volcano")
@@ -317,6 +326,11 @@ def area_summary(scored):
     out["house_completeness"] = 1 - sums["house_unmatched_count"] / sums["house_count"]
     out["houses"] = sums["house_count"].astype(int)
     out["unmapped_houses"] = sums["house_unmatched_count"].astype(int)
+    out["readiness"], out["readiness_cells"] = readiness(scored, percentile, min_houses)
+    # cells in the readiness set with only a few houses, to check how much they could sway it
+    few = ok[(ok["house_count"] >= min_houses) & (ok["house_count"] < few_houses)]
+    out["few_house_cells"] = few.groupby("volcano").size()
+    out[["readiness_cells", "few_house_cells"]] = out[["readiness_cells", "few_house_cells"]].fillna(0).astype(int)
     return out
 
 

@@ -43,6 +43,11 @@ compare:
   detector_fp: 0.029  # share of detected houses that aren't in osm on complete cells
   concentration: 30  # how much detector_fp varies between cells, lower is more spread
   ok_gap: 0.1  # a cell counts as mapped well enough when osm misses at most this share of its houses
+  # site-wide mapping readiness scalar: low percentile of cell house_completeness
+  readiness:
+    percentile: 20  # low tail: the cell worse than 80% of cells
+    min_houses: 1  # 1 skips water and empty cells, raise it to also skip cells where a few false positives decide the score
+    few_houses: 10  # only reported: how many readiness cells have fewer houses than this
 
 volcanoes:
   - {id: vesuvius, name: Vesuvius, lat: 40.821, lon: 14.426}
