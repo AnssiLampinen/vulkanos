@@ -46,8 +46,7 @@ compare:
   # site-wide mapping readiness scalar: low percentile of cell house_completeness
   readiness:
     percentile: 20  # low tail: the cell worse than 80% of cells
-    min_houses: 1  # 1 skips water and empty cells, raise it to also skip cells where a few false positives decide the score
-    few_houses: 10  # only reported: how many readiness cells have fewer houses than this
+    min_houses: 10  # skip water, empty land and cells where a few false positives decide the score, 1 keeps all cells with houses
 
 volcanoes:
   - {id: vesuvius, name: Vesuvius, lat: 40.821, lon: 14.426}

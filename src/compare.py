@@ -305,16 +305,16 @@ def top_cells(scored, n):
     return scored.sort_values(["gap_significance", "unmapped_houses_est"], ascending=False).head(n)[[c for c in cols if c in scored]]
 
 
-def readiness(scored, percentile=20, min_houses=1):
+def readiness(scored, percentile=20, min_houses=10):
     # site-wide mapping readiness: house_completeness of the cell worse than (100 - percentile)% of cells.
-    # a low percentile, so the badly mapped tail counts and not the average. a stray false positive cell
-    # only moves it if percentile% of cells are like that. min_houses 1 leaves out water and empty cells,
-    # raise it to also drop cells where a few false positives decide the score
+    # a low percentile, so the badly mapped tail counts and not the average. cells with fewer than
+    # min_houses detected houses are left out: water, empty land, and cells where one or two false
+    # positives make the cell 0% complete (on ercolano they crowd the bottom of the ranking)
     ok = scored[(scored["no_imagery"] == False) & (scored["house_count"] >= min_houses)]
     return ok.groupby("volcano")["house_completeness"].quantile(percentile / 100), ok.groupby("volcano").size()
 
 
-def area_summary(scored, percentile=20, min_houses=1, few_houses=10):
+def area_summary(scored, percentile=20, min_houses=10):
     # ratio of sums over cells with imagery, so empty cells don't pull it down
     ok = scored[scored["no_imagery"] == False]
     g = ok.groupby("volcano")
@@ -327,10 +327,10 @@ def area_summary(scored, percentile=20, min_houses=1, few_houses=10):
     out["houses"] = sums["house_count"].astype(int)
     out["unmapped_houses"] = sums["house_unmatched_count"].astype(int)
     out["readiness"], out["readiness_cells"] = readiness(scored, percentile, min_houses)
-    # cells in the readiness set with only a few houses, to check how much they could sway it
-    few = ok[(ok["house_count"] >= min_houses) & (ok["house_count"] < few_houses)]
-    out["few_house_cells"] = few.groupby("volcano").size()
-    out[["readiness_cells", "few_house_cells"]] = out[["readiness_cells", "few_house_cells"]].fillna(0).astype(int)
+    # cells with some houses that min_houses left out, to check what the cut removed
+    low = ok[(ok["house_count"] > 0) & (ok["house_count"] < min_houses)]
+    out["low_count_cells"] = low.groupby("volcano").size()
+    out[["readiness_cells", "low_count_cells"]] = out[["readiness_cells", "low_count_cells"]].fillna(0).astype(int)
     return out
 
 
