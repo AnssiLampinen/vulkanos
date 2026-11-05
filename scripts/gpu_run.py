@@ -74,6 +74,7 @@ def main():
     p.add_argument("--device", default="auto")
     p.add_argument("--workers", type=int, default=16, help="tile download threads")
     p.add_argument("--detect-batch", type=int, default=32)
+    p.add_argument("--skip-done", action="store_true", help="skip sites that already have their map in data/out")
     p.add_argument("--config", default="config.yaml")
     args = p.parse_args()
 
@@ -115,7 +116,12 @@ def main():
 
     radius = ["--radius", str(args.radius)] if args.radius else []
     failed = []
+    tag = "unet-" + ckpt.parent.name
     for s in sites:
+        done = ROOT / "data" / "out" / f"{s}_{tag}.html"
+        if args.skip_done and done.exists():
+            print(f"\n=== {s}: done already ({done.name}), skipping")
+            continue
         cmd = MAIN + ["run", "--site", s, "--checkpoint", str(ckpt.relative_to(ROOT)),
                       "--detect-batch", str(args.detect_batch)] + radius + common
         if not step(s, cmd, logs / f"{s}.log"):
