@@ -142,16 +142,47 @@ def block_sum(mask, block):
     return mask.reshape(h // block, block, w // block, block).sum(axis=(1, 3))
 
 
+def ragged(blob, px, min_holes):
+    # scrub and bare ground give blobs full of holes with pixel-jagged edges, real roofs have clean edges
+    _, holes = ndimage.label(ndimage.binary_fill_holes(blob) & ~blob)
+    if holes < min_holes:
+        return False
+    import cv2
+    cs, _ = cv2.findContours(np.pad(blob, 1).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    c = max(cs, key=cv2.contourArea)
+    # outline length against a 2 m simplified outline, buildings stay under ~1.10
+    jag = cv2.arcLength(c, True) / max(cv2.arcLength(cv2.approxPolyDP(c, 2.0 / px, True), True), 1)
+    return jag > 1.13
+
+
+def drop_unsure(pred, prob, rgb, min_prob, px, min_holes):
+    # false blobs on trees and fields are green and unsure, greenhouses are green but sure
+    labels, n = ndimage.label(pred, structure=np.ones((3, 3)))
+    if n == 0:
+        return pred
+    idx = np.arange(1, n + 1)
+    green = 2.0 * rgb[..., 1] - rgb[..., 0] - rgb[..., 2]
+    is_green = ndimage.mean(green, labels, idx) > 0
+    drop = (ndimage.mean(prob, labels, idx) < min_prob) & is_green
+    if min_holes:
+        for i, sl in enumerate(ndimage.find_objects(labels), 1):
+            if is_green[i - 1] and not drop[i - 1]:
+                drop[i - 1] = ragged(labels[sl] == i, px, min_holes)
+    return np.concatenate([[False], ~drop])[labels]
+
+
 def chip_masks(cfg, chip, osm, pred_dir):
     prob = load_prob(pred_path(pred_dir, chip))
     if prob is None:
         return None
-    _, valid = load_chip(cfg, chip)
+    rgb, valid = load_chip(cfg, chip)
     b = mercantile.bounds(chip)
     px = pixel_size((b.north + b.south) / 2, cfg["imagery"]["zoom"])
     buf = math.ceil(cfg["compare"]["osm_buffer_m"] / px)
     pred = remove_small(prob >= cfg["detector"]["threshold"], math.ceil(cfg["compare"]["min_object_m2"] / (px * px)))
     pred = pred & valid
+    if cfg["compare"]["min_blob_prob"]:
+        pred = drop_unsure(pred, prob, rgb, cfg["compare"]["min_blob_prob"], px, cfg["compare"].get("ragged_holes", 0))
     osm = rasterize_osm(osm, chip, prob.shape[0]) & valid
     masks = {
         "valid": valid,
