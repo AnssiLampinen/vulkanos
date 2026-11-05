@@ -26,6 +26,15 @@ training:
   lr: 0.0003
   workers: 4
   seed: 0
+  # dataset --suspect: background where the earlier model is this sure of a building gets ignored
+  suspect_threshold: 0.5
+  suspect_grow_px: 3
+
+# dataset --auto-cells: cells where the detector and osm agree count as complete
+auto_cells:
+  top_share: 0.25  # best agreeing quarter of the cells with buildings, by share of detected area in osm
+  min_recall: 0.6  # share of osm area that is detected, low means bad imagery or alignment
+  empty_cells: true
 
 compare:
   osm_buffer_m: 2  # osm and imagery are often a bit misaligned
