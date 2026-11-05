@@ -15,6 +15,26 @@ pip install -r requirements.txt
 On an RTX 50xx install torch from the cu128 index first:
 `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128`
 
+## Best pipeline
+
+The most accurate setup so far (2026-11), all on the `priority-filtered` branch:
+
+1. Detector: our U-Net `models/ercolano-r34/best.pt` (the default in config.yaml). On the ercolano
+   complete cells it gets area F1 0.91 and house precision 0.97; geobase_unet gets 0.42, yolo 0.13.
+2. Shape filter on: `min_blob_prob: 0.8`, `ragged_holes: 5` in config.yaml. Without it scrub and bare
+   ground on the slopes show up as many false positive houses.
+3. Mapping priority: each cell ranked by how significant its unmapped houses are (see below).
+
+```
+python src/main_parallel.py run --site ercolano --step compare --step report
+```
+
+`main_parallel.py` is `main.py` with the compare step spread over all CPU cores, same results.
+Add `--step tiles --step detect` (or no `--step`) for a new site. The map is
+`data/out/<site>_unet-ercolano-r34.html`, the ranking is the Mapping priority layer.
+
+The `mapping-priority` branch alone does not have the shape filter, so it gives more false positives.
+
 ## Running
 
 ```
