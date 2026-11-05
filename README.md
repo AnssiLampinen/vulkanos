@@ -15,6 +15,9 @@ pip install -r requirements.txt
 On an RTX 50xx install torch from the cu128 index first:
 `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128`
 
+
+What every output column means: [docs/columns.md](docs/columns.md).
+
 ## Best pipeline
 
 The most accurate setup so far (2026-11), all on the `priority-filtered` branch:
