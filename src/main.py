@@ -96,9 +96,18 @@ def run(cfg, s, steps, radius):
         ok = scored[(scored["low_signal"] == False) & (scored["no_imagery"] == False)]
         print(f"[{s['id']}] {len(scored)} cells, {len(ok)} with signal, "
               f"median completeness {ok['completeness'].median():.2f}")
-        a = compare.area_summary(scored).iloc[0]
+        r = cfg["compare"].get("readiness", {})
+        pct, min_houses = r.get("percentile", 20), r.get("min_houses", 10)
+        summary = compare.area_summary(scored, pct, min_houses)
+        a = summary.iloc[0]
         print(f"[{s['id']}] whole area completeness {a['completeness']:.2f} by m2, {a['house_completeness']:.2f} "
               f"by houses, {a['unmapped_houses']} of {a['houses']} houses not in osm")
+        print(f"[{s['id']}] mapping readiness {a['readiness']:.2f} (p{pct} house completeness over "
+              f"{a['readiness_cells']} cells with >= {min_houses} houses, {a['low_count_cells']} cells with fewer left out)")
+        out = cfg["data_dir"] / "out" / f"{s['id']}_{tag}_summary.csv"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        summary.assign(site=s["id"], detector=tag, readiness_percentile=pct, readiness_min_houses=min_houses).to_csv(out)
+        print(f"[{s['id']}] summary in {out}")
         print(f"[{s['id']}] cells most in need of mapping:")
         print(compare.top_cells(scored, 10).round(2).to_string(index=False))
 
