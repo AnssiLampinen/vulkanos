@@ -149,8 +149,9 @@ def cell_map(scored, site, out, overlay=None, imagery=None, outlines=None, tiles
 
     m = folium.Map(location=[site["lat"], site["lon"]], zoom_start=12, tiles=None)
     folium.TileLayer(ESRI, attr="Esri World Imagery", name="Imagery", max_zoom=20).add_to(m)
-    # tile.openstreetmap.org blocks pages opened from file://, carto doesn't
-    folium.TileLayer("CartoDB Voyager", name="OSM", max_zoom=20, show=False).add_to(m)
+    # tile.openstreetmap.org blocks pages opened from file:// and carto now wants an api key, esri works
+    folium.TileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", attr="Esri World Street Map", name="Streets", max_zoom=19,
+                     show=False).add_to(m)
     if imagery:
         # tile pane so it stays under the cells and detections
         folium.raster_layers.ImageOverlay(imagery[0], bounds=imagery[1], name="Imagery (downloaded tiles)",
