@@ -49,6 +49,8 @@ against "OSM misses at most `ok_gap` of the houses here", with the detector's fa
 `gap_p`, `gap_significance` (-log10 p, the ranking key), `mapping_priority` (1 - p, the 0..1
 multiplier for the combined ranking) and `unmapped_houses_est`. The map has a Mapping priority layer.
 
+What every output column means, and which one ranks the volcanoes: [docs/columns.md](docs/columns.md).
+
 ## Running on a GPU machine
 
 ```

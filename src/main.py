@@ -132,7 +132,8 @@ def summary(cfg, sites):
             print(f"[{s['id']}] no scores yet")
             continue
         scored = prioritise(cfg, gpd.read_parquet(f))
-        a = compare.area_summary(scored).iloc[0].to_dict()
+        r = cfg["compare"].get("readiness", {})
+        a = compare.area_summary(scored, r.get("percentile", 20), r.get("min_houses", 10)).iloc[0].to_dict()
         ok = scored[scored["no_imagery"] == False]
         a.update(site=s["id"], name=s["name"], detector=detect.detector_tag(cfg["detector"]),
                  unmapped_houses_est=int(ok["unmapped_houses_est"].sum()),
