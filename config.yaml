@@ -66,5 +66,5 @@ volcanoes:
 
 # small towns for testing, volcano is the id in volcanoes_file
 test_sites:
-  - {id: ercolano, name: Ercolano, lat: 40.806, lon: 14.349, volcano: vesuvius}
+  - {id: ercolano, name: Ercolano, lat: 40.821, lon: 14.426, volcano: vesuvius}  # centred on the vesuvius summit (gvp), ercolano town is 7 km west
   - {id: goma, name: Goma, lat: -1.670, lon: 29.230, volcano: nyiragongo}
