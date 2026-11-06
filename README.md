@@ -79,6 +79,10 @@ is a few minutes per site. Tiles are cached in `data/tiles`, so a second run onl
 Training uses bf16 on RTX 30xx and newer and fp16 on older cards. `main.py` takes `--device` too, and
 `python src/main.py summary --site a --site b --checkpoint ...` remakes the summary table.
 
+## Team run (250 volcanoes, 7 machines)
+
+See [docs/team_run.md](docs/team_run.md): `bash scripts/run_part.sh <name>` on your Aalto machine.
+
 ## Training our own detector
 
 Get tiles and OSM for the training sites:
