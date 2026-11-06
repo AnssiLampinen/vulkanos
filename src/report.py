@@ -10,7 +10,9 @@ from branca.element import Element
 from PIL import Image
 
 from compare import chip_masks, house_edges, split_houses
+from data import frame, load_tile, tile_path
 
+FRAME_ZOOM = 16  # about 2 m/px, a 10 km frame stays under 6000 px
 ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 
 LEGEND = """
@@ -22,8 +24,8 @@ white lines: cuts between houses
 </div>
 """
 
-FIELDS = ["cell_id", "dist_km", "completeness", "missed_m2", "pred_m2", "osm_m2", "pred_count", "unmatched_count",
-          "house_completeness", "house_count", "house_unmatched_count", "osm_house_count", "recall_vs_osm",
+FIELDS = ["cell_id", "dist_km", "volcano_dist_km", "completeness", "missed_m2", "pred_m2", "osm_m2", "pred_count", "unmatched_count",
+          "house_completeness", "house_count", "house_unmatched_count", "unmapped_houses_est", "gap_significance", "mapping_priority", "osm_house_count", "recall_vs_osm",
           "imagery_coverage"]
 
 
@@ -66,38 +68,124 @@ def overlay(cfg, chips, osm, pred_dir, max_px=8192):
     return url, [[se.south, nw.west], [nw.north, se.east]]
 
 
-def cell_map(scored, site, out, overlay=None):
+def grid(chips, size, max_px):
+    x0, y0 = min(c.x for c in chips), min(c.y for c in chips)
+    nx, ny = max(c.x for c in chips) - x0 + 1, max(c.y for c in chips) - y0 + 1
+    step = 1
+    while max(nx, ny) * size / step > max_px:
+        step *= 2
+    return x0, y0, nx, ny, step
+
+
+def to_layer(img, chips, fmt, **kw):
+    x0, y0 = min(c.x for c in chips), min(c.y for c in chips)
+    x1, y1 = max(c.x for c in chips), max(c.y for c in chips)
+    buf = io.BytesIO()
+    Image.fromarray(img).save(buf, format=fmt, **kw)
+    url = f"data:image/{fmt.lower()};base64," + base64.b64encode(buf.getvalue()).decode()
+    nw = mercantile.bounds(mercantile.Tile(x0, y0, chips[0].z))
+    se = mercantile.bounds(mercantile.Tile(x1, y1, chips[0].z))
+    return url, [[se.south, nw.west], [nw.north, se.east]]
+
+
+def imagery(cfg, s):
+    # the whole map frame from low zoom tiles, so there is a background even when esri doesn't load
+    tiles = list(mercantile.tiles(*frame(s, cfg["map_km"]), zooms=FRAME_ZOOM))
+    x0, y0 = min(t.x for t in tiles), min(t.y for t in tiles)
+    nx, ny = max(t.x for t in tiles) - x0 + 1, max(t.y for t in tiles) - y0 + 1
+    img = np.zeros((ny * 256, nx * 256, 4), np.uint8)
+    for t in tiles:
+        rgb = load_tile(tile_path(cfg, t))
+        if rgb is None:
+            continue
+        r, c = (t.y - y0) * 256, (t.x - x0) * 256
+        img[r:r + 256, c:c + 256, :3] = rgb
+        img[r:r + 256, c:c + 256, 3] = 255
+    return to_layer(img, tiles, "WEBP", quality=80)
+
+
+def outlines(cfg, chips, osm, pred_dir, max_px=8192):
+    # outer edge of the detected buildings, without the cuts between houses
+    osm = osm.to_crs(3857)
+    img = None
+    for chip in chips:
+        res = chip_masks(cfg, chip, osm, pred_dir)
+        if res is None:
+            continue
+        pred = res[0]["pred"]
+        if img is None:
+            size = pred.shape[0]
+            x0, y0, nx, ny, step = grid(chips, size, max_px)
+            cs = size // step
+            img = np.zeros((ny * cs, nx * cs, 4), np.uint8)
+        p = np.pad(pred, 1)
+        edge = pred & ~(p[:-2, 1:-1] & p[2:, 1:-1] & p[1:-1, :-2] & p[1:-1, 2:])
+        r, c = (chip.y - y0) * cs, (chip.x - x0) * cs
+        img[r:r + cs, c:c + cs][edge.reshape(cs, step, cs, step).any(axis=(1, 3))] = (255, 255, 0, 255)
+    if img is None:
+        return None
+    return to_layer(img, chips, "PNG", optimize=True)
+
+
+def cell_map(scored, site, out, overlay=None, imagery=None, outlines=None, tiles=None, bounds=None):
     gdf = scored.copy()
-    for c in ["completeness", "house_completeness", "missed_m2", "pred_m2", "osm_m2", "recall_vs_osm",
+    for c in ["completeness", "house_completeness", "unmapped_houses_est", "gap_significance", "mapping_priority", "missed_m2", "pred_m2", "osm_m2", "recall_vs_osm",
               "imagery_coverage"]:
         gdf[c] = gdf[c].round(2)
 
     colors = cm.LinearColormap(["#d7191c", "#fdae61", "#1a9641"], vmin=0, vmax=1)
     colors.caption = "OSM completeness (share of detected building area that is in OSM)"
 
-    def style_for(field):
+    need = cm.LinearColormap(["#ffffcc", "#fd8d3c", "#800026"], vmin=0, vmax=1)
+    need.caption = "Mapping priority (confidence that OSM misses more than ok_gap of the houses)"
+
+    def style_for(field, cmap=colors, grey_low_signal=True):
         def style(f):
             p = f["properties"]
-            if p["no_imagery"] or p["low_signal"] or p[field] is None:
+            if p["no_imagery"] or (grey_low_signal and p["low_signal"]) or p[field] is None:
                 return {"fillColor": "#999999", "fillOpacity": 0.15, "weight": 0.2, "color": "#666"}
-            return {"fillColor": colors(p[field]), "fillOpacity": 0.6, "weight": 0.2, "color": "#333"}
+            return {"fillColor": cmap(p[field]), "fillOpacity": 0.6, "weight": 0.2, "color": "#333"}
         return style
 
     m = folium.Map(location=[site["lat"], site["lon"]], zoom_start=12, tiles=None)
     folium.TileLayer(ESRI, attr="Esri World Imagery", name="Imagery", max_zoom=20).add_to(m)
-    # tile.openstreetmap.org blocks pages opened from file://, carto doesn't
-    folium.TileLayer("CartoDB Voyager", name="OSM", max_zoom=20, show=False).add_to(m)
+    # tile.openstreetmap.org blocks pages opened from file:// and carto now wants an api key, esri works
+    folium.TileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", attr="Esri World Street Map", name="Streets", max_zoom=19,
+                     show=False).add_to(m)
+    if imagery:
+        # tile pane so it stays under the cells and detections
+        folium.raster_layers.ImageOverlay(imagery[0], bounds=imagery[1], name="Imagery (downloaded tiles)",
+                                          interactive=False, pane="tilePane").add_to(m)
+    if tiles:
+        # full resolution from data/tiles when zoomed in, too many to embed
+        folium.TileLayer(tiles, attr="Esri World Imagery", name="Imagery (tile folder)", overlay=True,
+                         min_zoom=16, max_zoom=20, min_native_zoom=18, max_native_zoom=18).add_to(m)
     # same colours for both so they can be compared by toggling
     for field, name, show in [("completeness", "Completeness (area)", True),
                               ("house_completeness", "Completeness (houses)", False)]:
         folium.GeoJson(gdf[FIELDS + ["low_signal", "no_imagery", "geometry"]], name=name, style_function=style_for(field),
                        tooltip=folium.GeoJsonTooltip(fields=FIELDS), show=show).add_to(m)
+    if "mapping_priority" in gdf:
+        # few houses already means low priority, so low signal cells are coloured too
+        folium.GeoJson(gdf[FIELDS + ["low_signal", "no_imagery", "geometry"]], name="Mapping priority",
+                       style_function=style_for("mapping_priority", need, False),
+                       tooltip=folium.GeoJsonTooltip(fields=FIELDS), show=False).add_to(m)
+        need.add_to(m)
     if overlay:
         folium.raster_layers.ImageOverlay(overlay[0], bounds=overlay[1], name="Detections vs OSM", interactive=False,
                                           zindex=500).add_to(m)
         m.get_root().html.add_child(Element(LEGEND))
+    if outlines:
+        folium.raster_layers.ImageOverlay(outlines[0], bounds=outlines[1], name="Predicted outlines", interactive=False,
+                                          show=False).add_to(m)
     folium.Marker([site["lat"], site["lon"]], tooltip=site["name"]).add_to(m)
+    v = site["volcano"]
+    if (v["lat"], v["lon"]) != (site["lat"], site["lon"]):
+        folium.Marker([v["lat"], v["lon"]], tooltip=f"{v['name']} summit ({v['source']})",
+                      icon=folium.Icon(color="red", icon="caret-up", prefix="fa")).add_to(m)
     colors.add_to(m)
     folium.LayerControl().add_to(m)
+    if bounds:
+        m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
     out.parent.mkdir(parents=True, exist_ok=True)
     m.save(str(out))

@@ -35,6 +35,22 @@ def h3_cells(site, radius_km, res):
                             geometry=polys, crs="EPSG:4326")
 
 
+def frame(site, km):
+    # west, south, east, north of a km x km square around the site
+    lons, lats, _ = geod.fwd(np.full(4, site["lon"]), np.full(4, site["lat"]), [0, 90, 180, 270],
+                             np.full(4, km * 1000.0 / 2))
+    return lons[3], lats[2], lons[1], lats[0]
+
+
+def add_volcano_dist(cells, volcano):
+    # distance from each cell centre to the volcano summit
+    centres = [h3.cell_to_latlng(c) for c in cells["cell_id"]]
+    _, _, dist = geod.inv(np.full(len(cells), volcano["lon"]), np.full(len(cells), volcano["lat"]),
+                          [c[1] for c in centres], [c[0] for c in centres])
+    cells["volcano_dist_km"] = np.round(np.asarray(dist) / 1000, 3)
+    return cells
+
+
 def chips(cells, zoom, chip_tiles):
     # a chip is the parent tile of chip_tiles x chip_tiles imagery tiles
     area = cells.union_all()
@@ -118,15 +134,31 @@ def load_chip(cfg, chip):
     return rgb, valid
 
 
-def fetch_osm(area, cache_dir):
+OVERPASS = ["https://overpass-api.de/api", "https://overpass.kumi.systems/api", "https://overpass.private.coffee/api"]
+
+
+def fetch_osm(area, cache_dir, tries=8):
     ox.settings.use_cache = True
     ox.settings.cache_folder = str(cache_dir)
     ox.settings.requests_timeout = 300
-    try:
-        gdf = ox.features_from_polygon(area, tags={"building": True})
-    except ox._errors.InsufficientResponseError:
-        # no buildings at all
-        return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+    # public overpass servers are often full (502/504/429): go round the mirrors, waiting longer each time.
+    # answers are cached, so a retry only redoes the parts that failed
+    for i in range(tries):
+        ox.settings.overpass_url = OVERPASS[i % len(OVERPASS)]
+        ox.settings.overpass_rate_limit = i % len(OVERPASS) == 0  # only overpass-api.de has /status
+        try:
+            gdf = ox.features_from_polygon(area, tags={"building": True})
+            break
+        except ox._errors.InsufficientResponseError:
+            # no buildings at all
+            return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+        except Exception as e:
+            if i == tries - 1:
+                raise
+            wait = min(30 * 2 ** i, 600)
+            print(f"  overpass {ox.settings.overpass_url} failed ({str(e).splitlines()[0][:100]}), "
+                  f"next mirror in {wait}s")
+            time.sleep(wait)
     gdf = gdf[gdf.geom_type.isin(["Polygon", "MultiPolygon"])].reset_index()
     gdf = gdf[[c for c in ["element", "id", "building"] if c in gdf.columns] + ["geometry"]].copy()
     gdf["fetched_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
