@@ -3,6 +3,9 @@
 Each of us runs about 36 volcanoes on our own Aalto GPU machine. It takes one command, and it keeps
 running after you close your laptop.
 
+**Names to use in the commands (lowercase, exact spelling):** `anssi`, `adit`, `miro`, `janna`, `khoi`, `hieu`, `duc`.
+The examples below use `anssi`. Put your own name there instead.
+
 ## Who runs what, where
 
 | Person | Machine  | Sites file              |
@@ -65,7 +68,7 @@ Without the config, connect in two hops instead:
 
 ```bash
 ssh -i ~/.ssh/aaltokey USERNAME@kosh.aalto.fi
-ssh MACHINE           # run this on kosh, e.g. ssh hactar
+ssh MACHINE           # run this on kosh, e.g. ssh agda
 ```
 
 ## 2. Run your part (on your machine)
@@ -76,10 +79,10 @@ The first time, get the code:
 git clone -b gpu-run https://github.com/AnssiLampinen/vulkanos.git ~/vulkanos-team
 ```
 
-Then, every time, run this with your own name:
+Then, every time, run this. Replace `anssi` with your own name, spelled exactly as in the list at the top:
 
 ```bash
-cd ~/vulkanos-team && bash scripts/run_part.sh janna
+cd ~/vulkanos-team && bash scripts/run_part.sh anssi
 ```
 
 That one command does everything:
@@ -96,20 +99,20 @@ The run happens inside **tmux**, so it doesn't need your SSH connection to stay 
 
 - To leave it running, press `Ctrl-b`, let go, then press `d`. Then close the window or log out.
 - To check on it later, ssh to the same machine and run the same command again
-  (`bash scripts/run_part.sh janna`). It re-attaches to the running session and does not start a second run.
+  (`bash scripts/run_part.sh anssi`). It re-attaches to the running session and does not start a second run.
   `tmux attach -t vulkanos` does the same thing.
 - If it stopped (machine rebooted, crash), run the same command again. Finished sites are skipped.
 - You must come back to the **same machine**. The tmux session lives on that machine, not on kosh.
 
 ## 4. When it's done
 
-The window says `done` and shows where the results are, for example `~/vulkanos-team/results_janna.tar.gz`.
+The window says `done` and shows where the results are, for example `~/vulkanos-team/results_anssi.tar.gz`.
 The file is small: summary, scored cells and logs, no maps. Copy it to your laptop and send it to Anssi
 on Telegram:
 
 ```bash
-scp vulkanos:vulkanos-team/results_janna.tar.gz .          # with the ssh config above
-# without it: scp -J USERNAME@kosh.aalto.fi USERNAME@MACHINE:vulkanos-team/results_janna.tar.gz .
+scp vulkanos:vulkanos-team/results_anssi.tar.gz .          # with the ssh config above
+# without it: scp -J USERNAME@kosh.aalto.fi USERNAME@MACHINE:vulkanos-team/results_anssi.tar.gz .
 ```
 
 The maps are in `~/vulkanos-team/data/out/*.html` if you want to look at a volcano.
