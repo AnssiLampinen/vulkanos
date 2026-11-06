@@ -71,9 +71,9 @@ ssh -i ~/.ssh/aaltokey USERNAME@kosh.aalto.fi
 ssh MACHINE           # run this on kosh, e.g. ssh agda
 ```
 
-## 2. Run your part (on your machine)
+## 2. Run your part (on your Aalto machine, after you ssh in)
 
-The first time, get the code:
+Everything in this step runs on the Aalto machine from the table, not on your own laptop. The first time, get the code:
 
 ```bash
 git clone -b gpu-run https://github.com/AnssiLampinen/vulkanos.git ~/vulkanos-team
