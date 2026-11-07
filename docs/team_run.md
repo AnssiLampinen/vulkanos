@@ -89,9 +89,23 @@ That one command does everything:
 
 1. It updates the code with `git pull`.
 2. The first time, it installs Python packages into `.venv`, CUDA torch included. This takes about 5 to 10 minutes.
-3. It downloads the detector weights (`models/ercolano-r34/best.pt`) on its own.
-4. It runs every site in your file: imagery tiles, building detection, OSM buildings, comparison, and map.
+3. It downloads the starting weights (`models/ercolano-r34/best.pt`) on its own. This file is never changed.
+4. For every site in your file it trains that volcano its own weights, then maps it with them:
+   1. Imagery tiles and OSM buildings for the site.
+   2. Building detection with r34. These are used only to build the training set.
+   3. A training set from the site's own OSM buildings. Where r34 sees a building that OSM doesn't have,
+      the background is ignored, because that is probably an unmapped house and not empty ground.
+   4. r34 is fine-tuned on that set for 10 epochs (about 10 to 15 minutes). The weights go to
+      `models/<site>/site-osm/`. The training set (about 2 GB) is deleted afterwards.
+   5. Building detection again with the new weights, then comparison with OSM, mapping priority, and the map.
+
+   A site with fewer than 300 OSM buildings has too little to learn from. It keeps r34 as it is, and
+   `models/<site>/site-osm/done` says so.
 5. It packs the results into `results_<name>.tar.gz`.
+
+Each site takes roughly 25 minutes, so 36 sites take about 15 hours. Let it run overnight.
+Options go after your name and are passed on to `scripts/gpu_run.py`, for example
+`bash scripts/run_part.sh anssi --site-epochs 5` to train less.
 
 ## 3. Disconnect, then come back later
 
@@ -107,7 +121,8 @@ The run happens inside **tmux**, so it doesn't need your SSH connection to stay 
 ## 4. When it's done
 
 The window says `done` and shows where the results are, for example `~/vulkanos-team/results_anssi.tar.gz`.
-The file is small: summary, scored cells and logs, no maps. Copy it to your laptop and send it to Anssi
+The file is small: summaries, scored cells (with the site's own weights and with r34), training curves and
+logs. No maps, tiles or weights. Copy it to your laptop and send it to Anssi
 on Telegram:
 
 ```bash
@@ -115,11 +130,13 @@ scp vulkanos:vulkanos-team/results_anssi.tar.gz .          # with the ssh config
 # without it: scp -J USERNAME@kosh.aalto.fi USERNAME@MACHINE:vulkanos-team/results_anssi.tar.gz .
 ```
 
-The maps are in `~/vulkanos-team/data/out/*.html` if you want to look at a volcano.
+The maps are in `~/vulkanos-team/data/out/<site>_unet-site-osm.html` if you want to look at a volcano.
 
 ## If something goes wrong
 
 - **Some sites failed.** Overpass (the OSM server) is sometimes overloaded. Run the same command again and only the failed sites rerun. Each site's log is in `data/logs/<site>.log`.
-- **`Disk quota exceeded`.** Each site takes roughly 0.5 GB in your home. Check with `df -h ~`, and tell Anssi.
+- **`Disk quota exceeded`.** Each site keeps roughly 0.7 GB in your home (tiles, predictions, 100 MB of weights) and needs
+  about 2 GB more while it trains. Check with `df -h ~`, and tell Anssi.
+- **A site stopped during training.** Run the same command again. Training restarts for that site only.
 - **`cuda available False`.** You are probably on a machine without a working GPU. Try a spare machine.
 - **Anything else.** Send the last 30 lines of `data/logs/part_<name>.log` to the group.

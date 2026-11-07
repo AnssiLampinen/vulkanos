@@ -357,3 +357,17 @@ def detector_metrics(scored, cells):
     # over 1 means split_houses over-splits
     out["house_count_ratio"] = g["house_count"] / g["osm_house_count"]
     return out.round(3)
+
+
+def auto_complete_cells(scored, top_share, min_recall, low_signal_m2, empty=True):
+    # cells where a detector and osm agree best are probably complete, so they can stand in for hand
+    # labels. a detector trained on osm itself is never fully precise, so take the top share of cells by
+    # completeness instead of a fixed cutoff. empty cells (nothing detected, nothing in osm) are kept too,
+    # they teach fields and forest
+    ok = scored[scored["no_imagery"] == False]
+    built = ok[(ok["pred_m2"] >= low_signal_m2) & (ok["recall_vs_osm"] >= min_recall)]
+    built = built[built["completeness"] >= built["completeness"].quantile(1 - top_share)]
+    cells = set(built["cell_id"])
+    if empty:
+        cells |= set(ok[(ok["pred_m2"] < low_signal_m2 / 4) & (ok["osm_m2"] < low_signal_m2 / 4)]["cell_id"])
+    return cells

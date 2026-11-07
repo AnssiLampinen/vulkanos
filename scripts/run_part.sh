@@ -2,6 +2,10 @@
 # Run one person's share of the volcanoes on an Aalto GPU machine, start to finish.
 #
 #   bash scripts/run_part.sh <name>      # anssi adit miro janna khoi hieu duc
+#   bash scripts/run_part.sh <name> --site-epochs 5    # extra args go to scripts/gpu_run.py
+#
+# Every volcano gets its own weights: r34 is fine-tuned on that site's OSM buildings (models/<site>/site-osm)
+# and the site is then detected with them. models/ercolano-r34/best.pt itself is never changed.
 #
 # First run makes .venv (bash setup.sh), later runs reuse it. The work runs inside a tmux session
 # called "vulkanos", so you can close the ssh window and it keeps going. Run the same command again
@@ -10,6 +14,8 @@
 set -e
 cd "$(dirname "$0")/.."
 NAME=$(echo "${1:-}" | tr '[:upper:]' '[:lower:]')
+shift || true
+EXTRA="$*"
 SITES=sites/parts/$NAME.csv
 if [ -z "$NAME" ] || [ ! -f "$SITES" ]; then
     echo "usage: bash scripts/run_part.sh <name>, name is one of:"
@@ -32,7 +38,7 @@ if [ -z "$TMUX" ]; then
         sleep 3
     fi
     exec tmux new-session -s "$SESSION" \
-        "bash '$PWD/scripts/run_part.sh' '$NAME'; echo; echo 'done. Press Enter to close this window.'; read"
+        "bash '$PWD/scripts/run_part.sh' '$NAME' $EXTRA; echo; echo 'done. Press Enter to close this window.'; read"
 fi
 
 # inside tmux from here
@@ -48,15 +54,18 @@ fi
 . .venv/bin/activate
 mkdir -p data/logs
 set +e
-python scripts/gpu_run.py --sites-csv "$SITES" --radius 10 --skip-done 2>&1 | tee -a "data/logs/part_$NAME.log"
+python scripts/gpu_run.py --sites-csv "$SITES" --radius 10 --skip-done --per-site-train $EXTRA 2>&1 | tee -a "data/logs/part_$NAME.log"
 code=${PIPESTATUS[0]}
 set -e
 
-# small results bundle for Anssi: summary, scored cells, logs (no maps or tiles, those are big)
+# small results bundle for Anssi: summaries, scored cells (own weights and r34), training logs, logs
+# (no maps, tiles or weights, those are big)
 ids=$(python scripts/gpu_run.py --sites-csv "$SITES" --list-sites)
 files=(data/out/summary_*.csv data/logs)
 for s in $ids; do
-    for f in data/$s/cells_scored_*.parquet; do [ -f "$f" ] && files+=("$f"); done
+    for f in data/$s/cells_scored_*.parquet models/$s/site-osm/metrics.jsonl models/$s/site-osm/done; do
+        [ -f "$f" ] && files+=("$f")
+    done
 done
 tar czf "results_$NAME.tar.gz" "${files[@]}"
 echo
