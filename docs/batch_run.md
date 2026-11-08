@@ -8,25 +8,35 @@ A batch takes about 10 to 11 hours (about 25 minutes per site).
 | Batch | Machine     | Batch | Machine     |
 |-------|-------------|-------|-------------|
 | b01   | agda        | b06   | wonko       |
-| b02   | beeblebrox  | b07   | zarniwoop   |
+| b02   | zarquon     | b07   | zarniwoop   |
 | b03   | fenchurch   | b08   | gallumbits  |
 | b04   | hactar      | b09   | lunkwill    |
-| b05   | prefect     | b10   | vroomfondel |
+| b05   | prefect     | b10   | wowbagger   |
 
-If a machine is busy or down, change its row in `sites/batches/hosts.csv`, for example to `zarquon`, and start only that batch.
+If a machine is busy or down, change its row in `sites/batches/hosts.csv`, for example to `effrafax`, and start only that batch.
+Other Liftarit machines: effrafax, gargravarr, kapelsen, lallafa, loonquawl, nullify, phouchg, poodoo, quordlepleen,
+random, thrashbarg, tragula, vantrashell, varntvar, versenwald, vranx, zem. On 2026-11-08 beeblebrox and vroomfondel did not resolve.
 
 ## Where things go
 
-The home folder is the same on every Aalto machine, with a 100 GB quota. 250 sites need far more than that,
-so each batch works on its machine's local disk:
+The home folder is the same on every Aalto machine, with a 100 GB quota. 250 full sites need far more than that,
+so each batch works in a copy of the repo on its machine's local disk when there is one:
 
-- `/l/$USER/vulkanos` on each machine: a copy of the repo with its own `.venv`, tiles, predictions, maps and weights.
-  It is not backed up. If `/l` is missing, the batch falls back to `~/vulkanos-work/<batch>` and prints a WARNING.
-- `~/vulkanos-results/` in the home folder, shared by all machines:
-  - `logs/bNN.log`: the full log of each batch.
-  - `results_bNN.tar.gz`: summaries, scored cells (own weights and r34), training curves. Written when the batch ends.
-  - `weights/<site>.pt`: each site's trained weights, about 100 MB each, about 25 GB for all 250.
-    Set `NO_WEIGHTS=1` to skip copying them.
+1. `/l/$USER/vulkanos` when `/l` is writable (it is not on agda).
+2. `/tmp/vulkanos-$USER` when `/tmp` has at least 60 GB free.
+3. Otherwise `~/vulkanos-work/<batch>` in the home folder, and the log says NOTE. Each site's tiles and predictions are
+   then deleted once the site is done, so about 0.12 GB per site stays (weights, scores, map without imagery).
+   All 250 sites then take about 30 GB, plus up to about 2.5 GB per running batch while it works.
+
+Every batch uses the one `.venv` in `~/vulkanos-team` (about 6 GB), which `launch_all.sh start` makes the first time.
+Results go to `~/vulkanos-results/` in the home folder, shared by all machines:
+
+- `logs/bNN.log`: the full log of each batch.
+- `results_bNN.tar.gz`: summaries, scored cells (own weights and r34), training curves. Written when the batch ends.
+- `weights/<site>.pt`: each site's trained weights, about 100 MB each, about 25 GB for all 250.
+  In case 3 they stay in `~/vulkanos-work/<batch>/models/<site>/site-osm/` instead. Set `NO_WEIGHTS=1` to skip copying them.
+
+Check the home folder with `du -sh ~` before starting. Keep at least 50 GB free.
 
 ## Run it
 
@@ -49,7 +59,7 @@ so each batch works on its machine's local disk:
    ```
 
    For each batch, this ssh's to its machine and starts `scripts/run_batch.sh bNN` in a detached tmux session called
-   `vulkanos`. It prints how busy each GPU was and who is logged in. On its first run, each machine makes its own `.venv`
+   `vulkanos`. It prints how busy each GPU was and who is logged in. The first time, it makes `.venv` before starting
    (5 to 10 minutes). Then you can log out.
 
 4. Check on them from any Aalto machine:

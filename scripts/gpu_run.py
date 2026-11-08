@@ -86,6 +86,9 @@ def main():
     p.add_argument("--min-osm", type=int, default=300,
                    help="--per-site-train: with fewer osm buildings there is too little to learn from, "
                         "the site keeps --checkpoint unchanged")
+    p.add_argument("--clean", action="store_true",
+                   help="--per-site-train: delete the imagery tiles and predictions after each finished site, to "
+                        "save disk. The scores, weights and map stay, the map just has no imagery under it")
     p.add_argument("--keep-dataset", action="store_true", help="keep data/<site>/train_osm (about 2 GB a site)")
     p.add_argument("--skip-done", action="store_true", help="skip sites that already have their map in data/out")
     p.add_argument("--config", default="config.yaml")
@@ -213,6 +216,9 @@ def per_site(args, sites, base, radius, common, logs):
                       "--detect-batch", str(args.detect_batch)] + common
         if not step(f"{s} detect with its own weights", cmd, log):
             failed.append(s)
+        elif args.clean:
+            shutil.rmtree(ROOT / "data" / s / "pred", ignore_errors=True)
+            shutil.rmtree(ROOT / "data" / "tiles", ignore_errors=True)
 
     site_args = [a for s in sites for a in ("--site", s)]
     # the tag is all summary takes from the checkpoint, so any site's path gives unet-site-osm

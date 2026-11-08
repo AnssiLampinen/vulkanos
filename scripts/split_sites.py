@@ -28,8 +28,9 @@ HOSTS = {
     "hieu": "wonko",
     "duc": "zarniwoop",
 }
-# --batches: Liftarit machines (all RTX 5070 12 GB), the seven above first, then the spares
-MACHINES = list(HOSTS.values()) + ["gallumbits", "lunkwill", "vroomfondel", "zarquon"]
+# --batches: Liftarit machines (all RTX 5070 12 GB). beeblebrox and vroomfondel did not resolve on 2026-11-08
+MACHINES = ["agda", "zarquon", "fenchurch", "hactar", "prefect", "wonko", "zarniwoop", "gallumbits", "lunkwill", "wowbagger",
+            "effrafax", "gargravarr", "kapelsen", "lallafa", "loonquawl", "nullify", "phouchg", "poodoo"]
 
 
 def main():
