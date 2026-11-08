@@ -8,12 +8,14 @@ A batch takes about 10 to 11 hours (about 25 minutes per site).
 | Batch | Machine     | Batch | Machine     |
 |-------|-------------|-------|-------------|
 | b01   | agda        | b06   | wonko       |
-| b02   | beeblebrox  | b07   | zarniwoop   |
+| b02   | zarquon     | b07   | zarniwoop   |
 | b03   | fenchurch   | b08   | gallumbits  |
 | b04   | hactar      | b09   | lunkwill    |
-| b05   | prefect     | b10   | vroomfondel |
+| b05   | prefect     | b10   | wowbagger   |
 
-If a machine is busy or down, change its row in `sites/batches/hosts.csv`, for example to `zarquon`, and start only that batch.
+If a machine is busy or down, change its row in `sites/batches/hosts.csv`, for example to `effrafax`, and start only that batch.
+Other Liftarit machines: effrafax, gargravarr, kapelsen, lallafa, loonquawl, nullify, phouchg, poodoo, quordlepleen,
+random, thrashbarg, tragula, vantrashell, varntvar, versenwald, vranx, zem. On 2026-11-08 beeblebrox and vroomfondel did not resolve.
 
 ## Where things go
 
