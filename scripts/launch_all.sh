@@ -24,6 +24,11 @@ SSH="ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
 case "$CMD" in
 start)
     git pull --ff-only || echo "git pull failed, running the code as it is"
+    # one .venv in the home clone, shared by every batch
+    if ! .venv/bin/python -c "import torch, geopandas, h3, cv2" 2>/dev/null; then
+        rm -rf .venv
+        PIP_NO_CACHE_DIR=1 bash setup.sh
+    fi
     # download the starting weights once, every batch copies them from here
     if [ ! -f models/ercolano-r34/best.pt ]; then
         mkdir -p models/ercolano-r34
