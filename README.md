@@ -116,3 +116,22 @@ python src/main.py validate --site ercolano --site goma --checkpoint models/r34/
 ```
 
 Only validate on `val_cells.txt`, the other complete cells were used for training.
+
+### Without hand labelled cells
+
+OSM alone works almost as well. Train once treating every cell as complete, run it on the grid, then train
+again with the background ignored wherever that first model sees a building OSM doesn't have (those are
+probably unmapped buildings, not background):
+
+```
+python src/main.py dataset --site ercolano --all-cells --exclude labels/complete_cells.txt --dataset data/train_osm
+python src/main.py train --dataset data/train_osm --name osm-all
+python src/main.py run --site ercolano --step detect --step compare --checkpoint models/osm-all/last.pt
+python src/main.py dataset --site ercolano --all-cells --suspect unet-osm-all --exclude labels/complete_cells.txt --dataset data/train_suspect
+python src/main.py train --dataset data/train_suspect --name osm-suspect
+```
+
+`--exclude` leaves the hand labelled cells and one ring of cells around them out, so they stay a fair test.
+Leave it out when there are no hand labels. `--auto-cells unet-osm-all` instead picks the quarter of the cells
+where the first model agrees best with OSM as complete cells, but on ercolano that did worse than `--suspect`.
+`--steps` trains for a fixed number of steps whatever the dataset size.

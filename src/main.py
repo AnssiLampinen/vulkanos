@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import geopandas as gpd
+import h3
 import mercantile
 import pandas as pd
 import yaml
@@ -185,6 +186,14 @@ def main():
     p.add_argument("--all-cells", action="store_true", help="dataset: treat every cell as complete")
     p.add_argument("--positives-everywhere", action="store_true",
                    help="dataset: also use osm buildings outside the complete cells")
+    p.add_argument("--exclude", type=Path, help="dataset: cells file to leave out, e.g. the hand labelled test cells")
+    p.add_argument("--exclude-ring", type=int, default=1, help="dataset: also leave out cells this many rings around")
+    p.add_argument("--auto-cells", help="dataset: pick complete cells where this detector agrees with osm, "
+                                        "e.g. unet-osm-all, instead of the --cells file")
+    p.add_argument("--suspect", help="dataset: ignore background where this detector sees an unmapped building")
+    p.add_argument("--steps", type=int, help="train: optimizer steps, overrides --epochs")
+    p.add_argument("--encoder", help="train: e.g. resnet18")
+    p.add_argument("--init", help="train: start from this checkpoint instead of imagenet, e.g. models/ercolano-r34/best.pt")
     p.add_argument("--dataset", type=Path, help="dataset folder, default training.dataset_dir")
     p.add_argument("--name", default="r34", help="train: run name, saved to models/<name>")
     p.add_argument("--epochs", type=int)
@@ -211,6 +220,12 @@ def main():
         cfg["detector"]["batch_size"] = args.detect_batch
     if args.epochs:
         cfg["training"]["epochs"] = args.epochs
+    if args.steps:
+        cfg["training"]["steps"] = args.steps
+    if args.encoder:
+        cfg["training"]["encoder"] = args.encoder
+    if args.init:
+        cfg["training"]["init"] = args.init
     if args.batch_size:
         cfg["training"]["batch_size"] = args.batch_size
     dataset_dir = args.dataset or Path(cfg["training"]["dataset_dir"])
@@ -289,12 +304,29 @@ def main():
         from train import make_dataset
 
         parts = []
+        exclude = set()
+        complete = None if args.all_cells else set()
+        suspect_dirs = {}
         for s in sites:
             cells = get_cells(cfg, s, args.radius)
             chips = data.chips(cells, cfg["imagery"]["zoom"], cfg["imagery"]["chip_tiles"])
             parts.append((s["id"], chips, get_osm(cfg, s), set(cells["cell_id"])))
-        complete = None if args.all_cells else set(label.read_cells(args.cells))
-        index = make_dataset(cfg, parts, complete, dataset_dir, args.positives_everywhere)
+            if args.auto_cells:
+                scored = pd.read_parquet(site_dir(cfg, s) / f"cells_scored_{args.auto_cells}.parquet")
+                a = cfg["auto_cells"]
+                picked = compare.auto_complete_cells(scored, a["top_share"], a["min_recall"],
+                                                     cfg["compare"]["low_signal_m2"], a["empty_cells"])
+                print(f"[{s['id']}] {len(picked)} cells picked as complete from {args.auto_cells}")
+                complete |= picked
+            if args.suspect:
+                suspect_dirs[s["id"]] = site_dir(cfg, s) / "pred" / f"{args.suspect}_z{cfg['imagery']['zoom']}"
+        if args.exclude:
+            exclude = set(label.read_cells(args.exclude))
+            exclude |= {n for c in exclude for n in h3.grid_disk(c, args.exclude_ring)}
+            print(f"leaving out {len(exclude)} cells")
+        if not args.all_cells and not args.auto_cells:
+            complete = set(label.read_cells(args.cells))
+        index = make_dataset(cfg, parts, complete, dataset_dir, args.positives_everywhere, exclude, suspect_dirs)
         if len(index):
             print(index.groupby(["site", "split"]).size().unstack(fill_value=0).to_string())
         print(f"dataset in {dataset_dir}")
