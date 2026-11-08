@@ -16,8 +16,9 @@ REPO=$PWD
 CMD=${1:-status}
 shift || true
 HOSTS=sites/batches/hosts.csv
-BATCHES=${*:-$(tail -n +2 "$HOSTS" | cut -d, -f1)}
-host_of() { awk -F, -v b="$1" '$1 == b {print $2}' "$HOSTS"; }
+# tr: the csv files may have windows line ends
+BATCHES=${*:-$(tail -n +2 "$HOSTS" | tr -d '\r' | cut -d, -f1)}
+host_of() { tr -d '\r' < "$HOSTS" | awk -F, -v b="$1" '$1 == b {print $2}'; }
 OUT="$HOME/vulkanos-results"
 SSH="ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
 

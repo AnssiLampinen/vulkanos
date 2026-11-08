@@ -61,13 +61,13 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     for p, rs in parts.items():
         with open(out_dir / f"{p}.csv", "w", newline="", encoding="utf-8") as f:
-            w = csv.writer(f)
+            w = csv.writer(f, lineterminator="\n")
             w.writerow(["name", "lat", "lon", "volcano_number"])
             for r in rs:
                 w.writerow([r["volcano_name"], r["lat"], r["lon"], r["volcano_number"]])
         print(f"{p:6} {hosts[p]:11} {len(rs)} sites")
     with open(out_dir / "hosts.csv", "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
+        w = csv.writer(f, lineterminator="\n")
         w.writerow(["person", "host"])
         w.writerows(hosts.items())
 

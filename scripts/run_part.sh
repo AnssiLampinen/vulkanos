@@ -22,7 +22,7 @@ if [ -z "$NAME" ] || [ ! -f "$SITES" ]; then
     ls sites/parts/*.csv | xargs -n1 basename | sed 's/\.csv$//' | grep -v hosts | tr '\n' ' '; echo
     exit 1
 fi
-HOST=$(awk -F, -v n="$NAME" '$1 == n {print $2}' sites/parts/hosts.csv)
+HOST=$(tr -d '\r' < sites/parts/hosts.csv | awk -F, -v n="$NAME" '$1 == n {print $2}')
 SESSION=vulkanos
 
 # outside tmux: start (or re-attach to) the session and run this script inside it
