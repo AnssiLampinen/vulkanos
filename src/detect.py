@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -51,11 +52,14 @@ class GeobaseUnet:
 
 class Unet:
     # our own model from train.py
-    def __init__(self, checkpoint):
+    def __init__(self, checkpoint, device=None, batch_size=16):
         import torch
-        from train import make_model
+        from train import amp_dtype, describe, make_model, pick_device
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = pick_device(device)
+        self.dtype = amp_dtype(self.device)
+        self.batch_size = batch_size if self.device.type != "cpu" else 1
+        print("  unet on", describe(self.device))
         state = torch.load(checkpoint, map_location="cpu", weights_only=False)
         self.model = make_model(state["meta"]["encoder"], None)
         self.model.load_state_dict(state["model"])
@@ -64,22 +68,25 @@ class Unet:
         self.version = f"{Path(checkpoint).resolve()}:{Path(checkpoint).stat().st_mtime_ns}"
 
     def predict(self, rgb):
+        return self.predict_batch([rgb])[0]
+
+    def predict_batch(self, rgbs):
         import torch
         from train import normalize
 
-        x = normalize(rgb)[None].to(self.device)
-        with torch.no_grad(), torch.autocast(self.device.type, enabled=self.device.type == "cuda"):
+        x = torch.stack([normalize(r) for r in rgbs]).to(self.device, non_blocking=True)
+        with torch.no_grad(), torch.autocast(self.device.type, dtype=self.dtype, enabled=self.dtype is not None):
             logits = self.model(x)
-        return torch.sigmoid(logits[0, 0].float()).cpu().numpy()
+        return list(torch.sigmoid(logits[:, 0].float()).cpu().numpy())
 
 
-def load_detector(det):
+def load_detector(det, device=None):
     if det["name"] == "yolo":
         return Yolo(det["conf"])
     if det["name"] == "geobase_unet":
         return GeobaseUnet()
     if det["name"] == "unet":
-        return Unet(det["checkpoint"])
+        return Unet(det["checkpoint"], device, det.get("batch_size", 16))
     raise ValueError(f"unknown detector {det['name']}")
 
 
@@ -110,22 +117,36 @@ def run_detection(cfg, detector, chips, pred_dir):
                 f.unlink()
         stamp.write_text(detector.version)
 
-    done = skipped = 0
-    for i, chip in enumerate(chips):
-        out = pred_path(pred_dir, chip)
-        if out.exists():
-            continue
-        # otherwise an empty prediction gets saved and never redone
-        if not tiles_done(cfg, chip):
-            skipped += 1
-            continue
-        rgb, valid = load_chip(cfg, chip)
-        prob = detector.predict(rgb) if valid.any() else np.zeros(valid.shape, np.float32)
+    todo = [c for c in chips if not pred_path(pred_dir, c).exists()]
+    # otherwise an empty prediction gets saved and never redone
+    ready = [c for c in todo if tiles_done(cfg, c)]
+    skipped = len(todo) - len(ready)
+    bs = getattr(detector, "batch_size", 1)
+    done = 0
+
+    def save(chip, prob, valid):
         prob[~valid] = 0
+        out = pred_path(pred_dir, chip)
         tmp = out.with_suffix(".part.png")
         Image.fromarray(np.round(prob * 255).astype(np.uint8)).save(tmp)
         tmp.replace(out)
-        done += 1
-        if done % 200 == 0:
-            print(f"  {i + 1}/{len(chips)}")
+
+    # chips are read from disk in threads, a few batches at a time so memory stays small
+    step = bs * 4
+    with ThreadPoolExecutor(cfg["imagery"].get("workers", 8)) as pool:
+        for k in range(0, len(ready), step):
+            loaded = list(pool.map(lambda c: (c, *load_chip(cfg, c)), ready[k:k + step]))
+            for j in range(0, len(loaded), bs):
+                batch = loaded[j:j + bs]
+                use = [b for b in batch if b[2].any()]
+                probs = []
+                if use:
+                    probs = (detector.predict_batch([b[1] for b in use]) if hasattr(detector, "predict_batch")
+                             else [detector.predict(b[1]) for b in use])
+                for chip, _, valid in batch:
+                    save(chip, probs.pop(0) if valid.any() else np.zeros(valid.shape, np.float32), valid)
+            prev = done
+            done += len(loaded)
+            if done // 500 > prev // 500:
+                print(f"  {done}/{len(ready)}")
     return done, skipped

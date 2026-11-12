@@ -4,6 +4,7 @@ import h3
 import mercantile
 import numpy as np
 import pandas as pd
+from scipy.stats import betabinom
 from rasterio.features import rasterize
 from rasterio.transform import from_bounds
 from scipy import ndimage
@@ -142,16 +143,47 @@ def block_sum(mask, block):
     return mask.reshape(h // block, block, w // block, block).sum(axis=(1, 3))
 
 
+def ragged(blob, px, min_holes):
+    # scrub and bare ground give blobs full of holes with pixel-jagged edges, real roofs have clean edges
+    _, holes = ndimage.label(ndimage.binary_fill_holes(blob) & ~blob)
+    if holes < min_holes:
+        return False
+    import cv2
+    cs, _ = cv2.findContours(np.pad(blob, 1).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    c = max(cs, key=cv2.contourArea)
+    # outline length against a 2 m simplified outline, buildings stay under ~1.10
+    jag = cv2.arcLength(c, True) / max(cv2.arcLength(cv2.approxPolyDP(c, 2.0 / px, True), True), 1)
+    return jag > 1.13
+
+
+def drop_unsure(pred, prob, rgb, min_prob, px, min_holes):
+    # false blobs on trees and fields are green and unsure, greenhouses are green but sure
+    labels, n = ndimage.label(pred, structure=np.ones((3, 3)))
+    if n == 0:
+        return pred
+    idx = np.arange(1, n + 1)
+    green = 2.0 * rgb[..., 1] - rgb[..., 0] - rgb[..., 2]
+    is_green = ndimage.mean(green, labels, idx) > 0
+    drop = (ndimage.mean(prob, labels, idx) < min_prob) & is_green
+    if min_holes:
+        for i, sl in enumerate(ndimage.find_objects(labels), 1):
+            if is_green[i - 1] and not drop[i - 1]:
+                drop[i - 1] = ragged(labels[sl] == i, px, min_holes)
+    return np.concatenate([[False], ~drop])[labels]
+
+
 def chip_masks(cfg, chip, osm, pred_dir):
     prob = load_prob(pred_path(pred_dir, chip))
     if prob is None:
         return None
-    _, valid = load_chip(cfg, chip)
+    rgb, valid = load_chip(cfg, chip)
     b = mercantile.bounds(chip)
     px = pixel_size((b.north + b.south) / 2, cfg["imagery"]["zoom"])
     buf = math.ceil(cfg["compare"]["osm_buffer_m"] / px)
     pred = remove_small(prob >= cfg["detector"]["threshold"], math.ceil(cfg["compare"]["min_object_m2"] / (px * px)))
     pred = pred & valid
+    if cfg["compare"]["min_blob_prob"]:
+        pred = drop_unsure(pred, prob, rgb, cfg["compare"]["min_blob_prob"], px, cfg["compare"].get("ragged_holes", 0))
     osm = rasterize_osm(osm, chip, prob.shape[0]) & valid
     masks = {
         "valid": valid,
@@ -232,7 +264,57 @@ def add_scores(df, low_signal_m2):
     return df
 
 
-def area_summary(scored):
+def add_priority(scored, detector_fp, concentration, ok_gap):
+    # how sure are we that a cell really has houses missing from osm? 2 of 2 houses unmapped says little,
+    # 300 of 500 says a lot. one-sided test per cell against the null "osm misses at most ok_gap of the
+    # houses here". under the null a detected house shows up unmapped with mean rate p0, because the
+    # detector made it up (detector_fp) or osm misses it. detector errors cluster within a cell (one bad
+    # roof gets split into many houses), so the count is beta-binomial, not binomial: concentration is
+    # the beta's a + b, lower means more spread between cells. fit both with fit_null on complete cells
+    df = scored.copy()
+    ok = df["no_imagery"] == False
+    n = df["house_count"].fillna(0).round().astype(int)
+    k = df["house_unmatched_count"].fillna(0).round().astype(int)
+    p0 = detector_fp + (1 - detector_fp) * ok_gap
+    p = betabinom.sf(k - 1, n, p0 * concentration, (1 - p0) * concentration)  # P(at least k unmapped | null)
+    df["gap_p"] = np.clip(p, 1e-15, 1)  # sf isn't accurate below this
+    # ranking key, ties at the cap are broken by unmapped_houses_est in top_cells
+    df["gap_significance"] = -np.log10(df["gap_p"])
+    # 0..1 multiplier for the ranking formula: confidence that the cell is under-mapped
+    df["mapping_priority"] = 1 - df["gap_p"]
+    # houses really missing from osm, with the detector's false positives taken out
+    df["unmapped_houses_est"] = ((k - detector_fp * n) / (1 - detector_fp)).clip(lower=0)
+    df.loc[~ok, ["gap_p", "gap_significance", "mapping_priority", "unmapped_houses_est"]] = np.nan
+    return df
+
+
+def fit_null(scored, cells):
+    # on complete cells every unmapped detection is a detector error: their mean rate is detector_fp and
+    # the spread of the per-cell rates gives the beta-binomial concentration (method of moments)
+    sel = scored[scored["cell_id"].isin(cells) & (scored["house_count"] > 0)]
+    n, k = sel["house_count"], sel["house_unmatched_count"]
+    fp = k.sum() / n.sum()
+    var = np.average((k / n - fp) ** 2, weights=n) - fp * (1 - fp) / n.mean()  # minus binomial noise
+    conc = fp * (1 - fp) / var - 1 if var > 0 else float("inf")
+    return {"cells": len(sel), "detector_fp": round(float(fp), 4), "concentration": round(float(conc), 1)}
+
+
+def top_cells(scored, n):
+    cols = ["cell_id", "volcano", "dist_km", "house_count", "house_unmatched_count", "house_completeness",
+            "unmapped_houses_est", "gap_p", "gap_significance", "mapping_priority"]
+    return scored.sort_values(["gap_significance", "unmapped_houses_est"], ascending=False).head(n)[[c for c in cols if c in scored]]
+
+
+def readiness(scored, percentile=20, min_houses=10):
+    # site-wide mapping readiness: house_completeness of the cell worse than (100 - percentile)% of cells.
+    # a low percentile, so the badly mapped tail counts and not the average. cells with fewer than
+    # min_houses detected houses are left out: water, empty land, and cells where one or two false
+    # positives make the cell 0% complete (on ercolano they crowd the bottom of the ranking)
+    ok = scored[(scored["no_imagery"] == False) & (scored["house_count"] >= min_houses)]
+    return ok.groupby("volcano")["house_completeness"].quantile(percentile / 100), ok.groupby("volcano").size()
+
+
+def area_summary(scored, percentile=20, min_houses=10):
     # ratio of sums over cells with imagery, so empty cells don't pull it down
     ok = scored[scored["no_imagery"] == False]
     g = ok.groupby("volcano")
@@ -244,6 +326,11 @@ def area_summary(scored):
     out["house_completeness"] = 1 - sums["house_unmatched_count"] / sums["house_count"]
     out["houses"] = sums["house_count"].astype(int)
     out["unmapped_houses"] = sums["house_unmatched_count"].astype(int)
+    out["readiness"], out["readiness_cells"] = readiness(scored, percentile, min_houses)
+    # cells with some houses that min_houses left out, to check what the cut removed
+    low = ok[(ok["house_count"] > 0) & (ok["house_count"] < min_houses)]
+    out["low_count_cells"] = low.groupby("volcano").size()
+    out[["readiness_cells", "low_count_cells"]] = out[["readiness_cells", "low_count_cells"]].fillna(0).astype(int)
     return out
 
 
@@ -270,3 +357,17 @@ def detector_metrics(scored, cells):
     # over 1 means split_houses over-splits
     out["house_count_ratio"] = g["house_count"] / g["osm_house_count"]
     return out.round(3)
+
+
+def auto_complete_cells(scored, top_share, min_recall, low_signal_m2, empty=True):
+    # cells where a detector and osm agree best are probably complete, so they can stand in for hand
+    # labels. a detector trained on osm itself is never fully precise, so take the top share of cells by
+    # completeness instead of a fixed cutoff. empty cells (nothing detected, nothing in osm) are kept too,
+    # they teach fields and forest
+    ok = scored[scored["no_imagery"] == False]
+    built = ok[(ok["pred_m2"] >= low_signal_m2) & (ok["recall_vs_osm"] >= min_recall)]
+    built = built[built["completeness"] >= built["completeness"].quantile(1 - top_share)]
+    cells = set(built["cell_id"])
+    if empty:
+        cells |= set(ok[(ok["pred_m2"] < low_signal_m2 / 4) & (ok["osm_m2"] < low_signal_m2 / 4)]["cell_id"])
+    return cells

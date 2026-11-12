@@ -1,5 +1,7 @@
 data_dir: data
+device: auto  # auto, cuda, cuda:1, cpu, mps. --device overrides
 radius_km: 10
+map_km: 10  # the map shows this square around the site
 h3_res: 8
 
 imagery:
@@ -13,6 +15,7 @@ detector:
   conf: 0.25
   threshold: 0.5
   # checkpoint: models/r34/best.pt
+  batch_size: 16  # chips per gpu batch for our unet
 
 training:
   dataset_dir: data/train
@@ -26,6 +29,15 @@ training:
   lr: 0.0003
   workers: 4
   seed: 0
+  # dataset --suspect: background where the earlier model is this sure of a building gets ignored
+  suspect_threshold: 0.5
+  suspect_grow_px: 3
+
+# dataset --auto-cells: cells where the detector and osm agree count as complete
+auto_cells:
+  top_share: 0.25  # best agreeing quarter of the cells with buildings, by share of detected area in osm
+  min_recall: 0.6  # share of osm area that is detected, low means bad imagery or alignment
+  empty_cells: true
 
 compare:
   osm_buffer_m: 2  # osm and imagery are often a bit misaligned
@@ -33,15 +45,35 @@ compare:
   low_signal_m2: 200  # cells with less detected area are greyed out
   block_px: 8
   house_min_sep_m: 4  # touching detections get split into houses at least this far apart
+  min_blob_prob: 0.8  # green blobs with a lower mean probability are dropped, 0 turns it off
+  ragged_holes: 5  # green blobs with this many holes and jagged edges are dropped (scrub, bare ground), 0 turns it off
+  # mapping priority: beta-binomial test of each cell's unmapped houses against "osm is good enough here"
+  # detector_fp and concentration fitted on the 16 ercolano complete cells (validate prints them),
+  # 14 of those were r34 training cells so detector_fp is on the low side
+  detector_fp: 0.029  # share of detected houses that aren't in osm on complete cells
+  concentration: 30  # how much detector_fp varies between cells, lower is more spread
+  ok_gap: 0.1  # a cell counts as mapped well enough when osm misses at most this share of its houses
+  # site-wide mapping readiness scalar: low percentile of cell house_completeness
+  readiness:
+    percentile: 20  # low tail: the cell worse than 80% of cells
+    min_houses: 10  # skip water, empty land and cells where a few false positives decide the score, 1 keeps all cells with houses
 
+volcanoes_file: volcanoes.yaml  # summit coordinates, edit there
+
+# grids around the volcano summits, coordinates come from volcanoes_file
 volcanoes:
-  - {id: vesuvius, name: Vesuvius, lat: 40.821, lon: 14.426}
-  - {id: merapi, name: Merapi, lat: -7.540, lon: 110.446}
-  - {id: nyiragongo, name: Nyiragongo, lat: -1.520, lon: 29.250}
-  - {id: fuego, name: Fuego, lat: 14.473, lon: -90.880}
-  - {id: taal, name: Taal, lat: 14.002, lon: 120.993}
+  - {id: vesuvius}
+  - {id: merapi}
+  - {id: nyiragongo}
+  - {id: fuego}
+  - {id: taal}
+  - {id: sakurajima}
+  - {id: mayon}
+  - {id: agung}
+  - {id: popocatepetl}
+  - {id: etna}
 
-# small towns for testing
+# small towns for testing, volcano is the id in volcanoes_file
 test_sites:
-  - {id: ercolano, name: Ercolano, lat: 40.806, lon: 14.349}
-  - {id: goma, name: Goma, lat: -1.670, lon: 29.230}
+  - {id: ercolano, name: Ercolano, lat: 40.821, lon: 14.426, volcano: vesuvius}  # centred on the vesuvius summit (gvp), ercolano town is 7 km west
+  - {id: goma, name: Goma, lat: -1.670, lon: 29.230, volcano: nyiragongo}

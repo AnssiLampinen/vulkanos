@@ -26,6 +26,63 @@ Steps are tiles, detect, osm, compare and report, all of them by default. The gr
 run with radius_km from config.yaml, `--radius` makes it again. Everything goes to `data/<site>/` and
 the map to `data/out/<site>_<detector>.html`. Without `--site` it runs all the volcanoes.
 
+## Volcano coordinates
+
+Summits are in `volcanoes.yaml`. Each volcano has the Smithsonian GVP coordinates, an `osm:` line
+for the OpenStreetMap summit node and an empty `lat`/`lon` to set by hand. The first one that is set
+wins: hand-set, then OSM, then GVP. Fill in the OSM lines (only those lines get rewritten) and print
+what is used with
+
+```
+python src/main.py volcanoes
+```
+
+The volcano grids are centred on the summit, so after changing one make the grid again with
+`--radius`. Every cell gets `volcano_dist_km`, the distance to the summit, also for test sites.
+
+## Mapping priority
+
+`compare` ranks cells by how sure we are that OSM misses houses there, not by the raw count: 2 of 2
+houses unmapped is weak evidence, 300 of 500 is strong. Each cell gets a one-sided beta-binomial test
+against "OSM misses at most `ok_gap` of the houses here", with the detector's false positives
+(`detector_fp`, `concentration`) fitted on the complete cells; `validate` prints the fit. Columns:
+`gap_p`, `gap_significance` (-log10 p, the ranking key), `mapping_priority` (1 - p, the 0..1
+multiplier for the combined ranking) and `unmapped_houses_est`. The map has a Mapping priority layer.
+
+What every output column means, and which one ranks the volcanoes: [docs/columns.md](docs/columns.md).
+
+## Running on a GPU machine
+
+```
+bash setup.sh                 # Linux, or setup.bat on Windows. default CUDA 12.8 wheels (RTX 50xx needs them), CUDA=cu126 / setup.bat cu126 for older drivers
+. .venv/bin/activate          # .venv\Scripts\activate.bat on Windows
+python scripts/gpu_run.py     # 10 sites with the ercolano r34 unet
+```
+
+`gpu_run.py` downloads `models/ercolano-r34/best.pt` from the `models` branch when it isn't there, then runs
+tiles, detect, osm, compare and report for each site with one log per site in `data/logs/`. A failing
+site is skipped. At the end `data/out/summary_<detector>.csv` has one row per site (completeness,
+unmapped houses, cells with mapping priority >= 0.95) and the maps are in `data/out/`.
+
+- `--sites-csv sites/volcanoes_30.csv` runs sites from a name,lat,lon csv (the point is the summit), `--list-sites`
+  prints their ids, add `--site gunung_merapi` for one of them
+- `sites/demo.csv` is the demo set (Ercolano on the Vesuvius summit + 5 from the list); check centres first with
+  `python scripts/sites_map.py sites/demo.csv --radius 10` (writes `data/out/sites_map.html`)
+- `--site merapi --site taal` picks sites, `--radius 5` makes smaller grids (faster, chips grow with r^2)
+- `--train` first trains a new unet here (`--train-site`, `--epochs`, `--batch-size`, `--dataset-args
+  "--all-cells"`) and runs with `models/<name>/best.pt`
+- `--device cuda:1` picks the card, `--detect-batch` the chips per GPU batch, `--workers` the download threads
+- on a Slurm cluster: `sbatch scripts/slurm.sh --train`
+
+Most of the time goes to downloading the imagery (about 16k tiles per site at 10 km); detection on a GPU
+is a few minutes per site. Tiles are cached in `data/tiles`, so a second run only redoes what changed.
+Training uses bf16 on RTX 30xx and newer and fp16 on older cards. `main.py` takes `--device` too, and
+`python src/main.py summary --site a --site b --checkpoint ...` remakes the summary table.
+
+## Team run (250 volcanoes, 7 machines)
+
+See [docs/team_run.md](docs/team_run.md): `bash scripts/run_part.sh <name>` on your Aalto machine.
+
 ## Training our own detector
 
 Get tiles and OSM for the training sites:
@@ -59,3 +116,22 @@ python src/main.py validate --site ercolano --site goma --checkpoint models/r34/
 ```
 
 Only validate on `val_cells.txt`, the other complete cells were used for training.
+
+### Without hand labelled cells
+
+OSM alone works almost as well. Train once treating every cell as complete, run it on the grid, then train
+again with the background ignored wherever that first model sees a building OSM doesn't have (those are
+probably unmapped buildings, not background):
+
+```
+python src/main.py dataset --site ercolano --all-cells --exclude labels/complete_cells.txt --dataset data/train_osm
+python src/main.py train --dataset data/train_osm --name osm-all
+python src/main.py run --site ercolano --step detect --step compare --checkpoint models/osm-all/last.pt
+python src/main.py dataset --site ercolano --all-cells --suspect unet-osm-all --exclude labels/complete_cells.txt --dataset data/train_suspect
+python src/main.py train --dataset data/train_suspect --name osm-suspect
+```
+
+`--exclude` leaves the hand labelled cells and one ring of cells around them out, so they stay a fair test.
+Leave it out when there are no hand labels. `--auto-cells unet-osm-all` instead picks the quarter of the cells
+where the first model agrees best with OSM as complete cells, but on ercolano that did worse than `--suspect`.
+`--steps` trains for a fixed number of steps whatever the dataset size.
