@@ -86,3 +86,16 @@ Check the home folder with `du -sh ~` before starting. Keep at least 50 GB free.
   or move the batch to another machine in `hosts.csv`.
 - **A machine rebooted:** its tmux session is gone. `start` for that batch picks up where it stopped.
 - These are classroom machines. If someone is sitting at one, move the batch to a spare machine.
+
+## The 14 missing volcanoes (b11 ... b17)
+
+14 volcanoes were left out of the 250 (Tanzania, Virunga, Chiles-Cerro Negro and 4 mid-ocean ones). They are
+`sites/batches/b11.csv` ... `b17.csv`, 2 sites each, on agda, zarquon, fenchurch, hactar, prefect, wonko and zarniwoop
+(rows added to `hosts.csv`). Same pipeline, about an hour in all:
+
+    cd ~/vulkanos-team && git pull && bash scripts/launch_missing.sh start
+    bash scripts/launch_missing.sh status
+
+Results land next to the others: `~/vulkanos-results/results_b11.tar.gz` ... `b17`, maps in `~/vulkanos-work/b11/data/out/` ...
+The mid-ocean sites (both EPR sites, Romanche Fracture Zone, Ascension) have no people near them and will most likely give
+no houses. Don't run plain `launch_all.sh start` with no batches: it would restart b01 ... b10 too.
