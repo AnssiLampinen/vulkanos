@@ -1,3 +1,5 @@
+import hashlib
+import io
 import math
 import time
 from collections import Counter
@@ -17,6 +19,8 @@ from shapely.geometry import Polygon, box
 TILE_URLS = {
     "esri": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
 }
+# esri "map data not yet available" tile, std is above the blank check
+PLACEHOLDER_MD5 = "f27d9de7f80c13501f470595e327aa6d"
 
 geod = Geod(ellps="WGS84")
 
@@ -66,19 +70,27 @@ def tile_path(cfg, t):
     return cfg["data_dir"] / "tiles" / cfg["imagery"]["provider"] / str(t.z) / str(t.x) / f"{t.y}.jpg"
 
 
-def download_tile(session, url, path):
+def download_tile(session, url, t, path):
     missing = path.with_suffix(".missing")
     if path.exists():
-        return "cached"
+        # placeholders cached before blankTile=false get fetched again
+        if hashlib.md5(path.read_bytes()).hexdigest() != PLACEHOLDER_MD5:
+            return "cached"
+        path.unlink()
     if missing.exists():
         return "missing"
     for i in range(3):
         try:
-            r = session.get(url, timeout=30)
+            r = session.get(url.format(z=t.z, x=t.x, y=t.y) + "?blankTile=false", timeout=30)
             path.parent.mkdir(parents=True, exist_ok=True)
             if r.status_code == 404:
-                missing.touch()
-                return "missing"
+                content = parent_quarter(session, url, t)
+                if content is None:
+                    missing.touch()
+                    return "missing"
+                path.with_suffix(".part").write_bytes(content)
+                path.with_suffix(".part").replace(path)
+                return "upsampled"
             r.raise_for_status()
             path.with_suffix(".part").write_bytes(r.content)
             path.with_suffix(".part").replace(path)
@@ -88,13 +100,28 @@ def download_tile(session, url, path):
     return "failed"
 
 
+def parent_quarter(session, url, t):
+    # no imagery at this zoom (galapagos stops at z17), cut our quarter out of the parent and upsample
+    p = mercantile.parent(t)
+    r = session.get(url.format(z=p.z, x=p.x, y=p.y) + "?blankTile=false", timeout=30)
+    if r.status_code == 404:
+        return None
+    r.raise_for_status()
+    img = Image.open(io.BytesIO(r.content)).convert("RGB")
+    c, row = (t.x - p.x * 2) * 128, (t.y - p.y * 2) * 128
+    img = img.crop((c, row, c + 128, row + 128)).resize((256, 256), Image.BICUBIC)
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=90)
+    return buf.getvalue()
+
+
 def download_tiles(cfg, tiles):
     url = TILE_URLS[cfg["imagery"]["provider"]]
     session = requests.Session()
     session.headers["User-Agent"] = "vulkanos-research/0.1"
 
     def get(t):
-        return download_tile(session, url.format(z=t.z, x=t.x, y=t.y), tile_path(cfg, t))
+        return download_tile(session, url, t, tile_path(cfg, t))
 
     with ThreadPoolExecutor(cfg["imagery"]["workers"]) as pool:
         return Counter(pool.map(get, tiles))
