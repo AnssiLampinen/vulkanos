@@ -15,7 +15,10 @@ cd "$(dirname "$0")/.."
 REPO=$PWD
 CMD=${1:-status}
 shift || true
-HOSTS=sites/batches/hosts.csv
+# HOSTS, BATCH_DIR and GPU_ARGS are set by scripts/launch_near.sh for the nearest-site reruns
+HOSTS=${HOSTS:-sites/batches/hosts.csv}
+BATCH_DIR=${BATCH_DIR:-$REPO/sites/batches}
+GPU_ARGS=${GPU_ARGS:---per-site-train}
 # tr: the csv files may have windows line ends
 BATCHES=${*:-$(tail -n +2 "$HOSTS" | tr -d '\r' | cut -d, -f1)}
 host_of() { tr -d '\r' < "$HOSTS" | awk -F, -v b="$1" '$1 == b {print $2}'; }
@@ -44,7 +47,7 @@ start)
         $SSH "$h" "
             if tmux has-session -t vulkanos 2>/dev/null; then echo 'already running, left alone'; exit 0; fi
             gpu=\$(nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader 2>/dev/null || echo 'no nvidia-smi')
-            tmux new-session -d -s vulkanos \"bash '$REPO/scripts/run_batch.sh' $b; echo; echo done, press Enter; read\"
+            tmux new-session -d -s vulkanos \"BATCH_DIR='$BATCH_DIR' GPU_ARGS='$GPU_ARGS' bash '$REPO/scripts/run_batch.sh' $b; echo; echo done, press Enter; read\"
             echo \"started (gpu before start: \$gpu, users: \$(who | awk '{print \$1}' | sort -u | tr '\n' ' '))\"
         " || echo "ssh failed"
     done
@@ -59,8 +62,8 @@ status)
             printf '%s %-12s not started\n' "$b" "$h"
             continue
         fi
-        n=$(grep -oE '^=== [a-z0-9_]+ detect with its own weights ok' "$log" | sort -u | wc -l)
-        total=$(($(wc -l < "sites/batches/$b.csv") - 1))
+        n=$(grep -oE '^=== [a-z0-9_]+ detect with (its own|nearest-site) weights ok' "$log" | sort -u | wc -l)
+        total=$(($(wc -l < "$BATCH_DIR/$b.csv") - 1))
         last=$(grep '^=== ' "$log" | tail -1 | cut -c1-90)
         printf '%s %-12s %2s/%s sites, %s\n' "$b" "$h" "$n" "$total" "$last"
     done
