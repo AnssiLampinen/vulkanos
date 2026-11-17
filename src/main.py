@@ -99,15 +99,19 @@ def run(cfg, s, steps, radius):
               f"median completeness {ok['completeness'].median():.2f}")
         r = cfg["compare"].get("readiness", {})
         pct, min_houses = r.get("percentile", 20), r.get("min_houses", 10)
-        summary = compare.area_summary(scored, pct, min_houses)
+        shrink_c, new_min = r.get("shrink_c", 0.005), r.get("new_min_houses", 1)
+        summary = compare.area_summary(scored, pct, min_houses, shrink_c, new_min)
         a = summary.iloc[0]
         print(f"[{s['id']}] whole area completeness {a['completeness']:.2f} by m2, {a['house_completeness']:.2f} "
               f"by houses, {a['unmapped_houses']} of {a['houses']} houses not in osm")
         print(f"[{s['id']}] mapping readiness {a['readiness']:.2f} (p{pct} house completeness over "
               f"{a['readiness_cells']} cells with >= {min_houses} houses, {a['low_count_cells']} cells with fewer left out)")
+        print(f"[{s['id']}] robust readiness: shrunk {a['readiness_shrunk']:.2f}, house-weighted {a['readiness_weighted']:.2f}, "
+              f"both {a['readiness_both']:.2f} (k {a['shrink_k']:.0f} = {shrink_c} x {a['houses']} houses)")
         out = cfg["data_dir"] / "out" / f"{s['id']}_{tag}_summary.csv"
         out.parent.mkdir(parents=True, exist_ok=True)
-        summary.assign(site=s["id"], detector=tag, readiness_percentile=pct, readiness_min_houses=min_houses).to_csv(out)
+        summary.assign(site=s["id"], detector=tag, readiness_percentile=pct, readiness_min_houses=min_houses,
+                       readiness_shrink_c=shrink_c, readiness_new_min_houses=new_min).to_csv(out)
         print(f"[{s['id']}] summary in {out}")
         print(f"[{s['id']}] cells most in need of mapping:")
         print(compare.top_cells(scored, 10).round(2).to_string(index=False))
@@ -134,7 +138,8 @@ def summary(cfg, sites):
             continue
         scored = prioritise(cfg, gpd.read_parquet(f))
         r = cfg["compare"].get("readiness", {})
-        a = compare.area_summary(scored, r.get("percentile", 20), r.get("min_houses", 10)).iloc[0].to_dict()
+        a = compare.area_summary(scored, r.get("percentile", 20), r.get("min_houses", 10),
+                                 r.get("shrink_c", 0.005), r.get("new_min_houses", 1)).iloc[0].to_dict()
         ok = scored[scored["no_imagery"] == False]
         a.update(site=s["id"], name=s["name"], detector=detect.detector_tag(cfg["detector"]),
                  unmapped_houses_est=int(ok["unmapped_houses_est"].sum()),

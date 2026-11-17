@@ -25,6 +25,35 @@ percentile is used so the badly mapped part of the area decides the score, not t
 well-mapped town centres would pull up. Percentile and `min_houses` are set in `config.yaml` under
 `compare: readiness:`.
 
+### Robust variants (trial)
+
+`readiness` sits at 0 for 103 of the 250 team-run sites, also for sites where 60-75% of all detected
+houses are in OSM (karang, ranakah, bilate_river_field), because a fifth of the cells are small and have
+none of their few houses in OSM. Three variants are written next to it so they can be compared before
+one replaces it:
+
+- **`readiness_shrunk`**: each cell's score is pulled toward the site's pooled completeness `p`
+  (= `house_completeness` of the site) with a beta prior of strength `k`:
+  `(mapped + k * p) / (houses + k)`. `k = shrink_c * site houses`, so a cell holding `shrink_c`
+  (0.5%) of the site's detected houses moves halfway to the site average, a much smaller cell
+  almost all the way, a big cell hardly. Then the plain 20th percentile over cells.
+- **`readiness_weighted`**: 20th percentile of the raw cell `house_completeness`, counted over houses
+  instead of cells (each cell weighted by `house_count`): 20% of the site's detected houses are in
+  cells mapped worse than this.
+- **`readiness_both`**: shrunk cell scores, house-weighted 20th percentile.
+
+Why `shrink_c` 0.005: across the 250 sites, sites have a median of 88 cells with houses, so `k` is
+about half to one average cell. That is enough to stop 1-5 house cells deciding the score but
+leaves cells with real numbers of houses close to their own value. For the median site (1,000
+houses) `k` is 5, for a large Java site (25,000 houses) 125. The variants use every cell with at
+least `new_min_houses` (1) house, the shrinkage takes over the job of the 10-house cut.
+
+On the team run: the shrunk and both variants are 0 for 36 sites, all with a pooled completeness of
+0 (essentially nothing in OSM). The weighted variant alone stays 0 for 110 sites, because on many
+sites a fifth of the houses really are in cells with nothing in OSM. Shrunk and both rank sites
+almost the same as the pooled `house_completeness` (Spearman 0.99), lower by how bad the worst cells
+are. `scripts/recompute_readiness.py` recomputes all columns from existing cell parquets.
+
 `readiness` does not grow with the number of people or houses, so it stays separate from the
 population factor. `unmapped_houses_est` is the absolute count if you want size to matter.
 
@@ -44,12 +73,17 @@ population factor. `unmapped_houses_est` is the absolute count if you want size 
 | `readiness` | 20th percentile of cell `house_completeness` over cells with >= 10 houses, see above |
 | `readiness_cells` | cells that went into `readiness`; under ~20 the score is shaky |
 | `low_count_cells` | cells with 1-9 detected houses, left out of `readiness` |
+| `readiness_shrunk` | 20th percentile over cells of the cell completeness shrunk toward the site average, see robust variants |
+| `readiness_weighted` | house-weighted 20th percentile of cell `house_completeness` |
+| `readiness_both` | house-weighted 20th percentile of the shrunk cell completeness |
+| `shrink_k` | prior strength used, `shrink_c * houses` |
+| `readiness_new_cells` | cells with >= `new_min_houses` houses that went into the three variants |
 | `unmapped_houses_est` | sum of the cell `unmapped_houses_est`: houses missing from OSM after taking out the detector's false positives |
 | `cells_priority_95` | cells with `mapping_priority >= 0.95`, i.e. at least 95% sure OSM misses more than `ok_gap` (10%) of the houses there |
 | `mean_mapping_priority` | mean of the cell `mapping_priority` |
 
-The per-site `<site>_<detector>_summary.csv` also has `readiness_percentile` and
-`readiness_min_houses`, the settings it was made with.
+The per-site `<site>_<detector>_summary.csv` also has `readiness_percentile`,
+`readiness_min_houses`, `readiness_shrink_c` and `readiness_new_min_houses`, the settings it was made with.
 
 ## Cell table, one row per H3 cell
 
