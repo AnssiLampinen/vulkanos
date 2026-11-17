@@ -121,3 +121,6 @@ sites that fail that test. Results use the detector tag `unet-site-near` (maps i
 `~/vulkanos-work/nNN/data/out/<site>_unet-site-near.html`, `~/vulkanos-results/results_nNN.tar.gz`), the
 donor of each site is in `data/near/rerun/plan.csv` and `models/<site>/site-near/donor.txt`.
 `models/<site>/site-near/best.pt` is a link to the donor's weights, nothing is copied or changed.
+Each batch runs in a detached tmux session on its machine (`vulkanos-retrain` for stage 1, `vulkanos-near` for
+stage 2), so logging out doesn't stop it. Watch one with `ssh <host> -t tmux attach -t vulkanos-near`, detach with
+Ctrl-b then d.

@@ -10,6 +10,9 @@
 #   bash scripts/launch_near.sh status      # progress of whichever stage was started last
 #   bash scripts/launch_near.sh stop
 #
+# Every batch runs on its machine in a detached tmux session (vulkanos-retrain for stage 1, vulkanos-near
+# for stage 2), so it keeps going when you log out. Watch one with: ssh <host> -t tmux attach -t vulkanos-near
+# (detach with Ctrl-b then d). Running start again retries failed sites; running batches are left alone.
 # Stage 1 and 2 use the same machines, so wait for `status` to show stage 1 finished before `start`.
 # The plan comes from the finished batches themselves (models/<site>/site-osm/done), see
 # scripts/near_plan.py. Each rerun site gets models/<site>/site-near/best.pt, a link to the donor's
@@ -32,10 +35,10 @@ stage() {  # retrain | rerun, the one started last
 launch() {  # $1 = retrain | rerun, rest = launch_all.sh args
     local s=$1; shift
     if [ "$s" = retrain ]; then
-        HOSTS=$NEAR/retrain/hosts.csv BATCH_DIR=$NEAR/retrain GPU_ARGS=--per-site-train \
+        SESSION=vulkanos-retrain HOSTS=$NEAR/retrain/hosts.csv BATCH_DIR=$NEAR/retrain GPU_ARGS=--per-site-train \
             bash scripts/launch_all.sh "$@"
     else
-        HOSTS=$NEAR/rerun/hosts.csv BATCH_DIR=$NEAR/rerun GPU_ARGS="--near-plan $NEAR/rerun/plan.csv" \
+        SESSION=vulkanos-near HOSTS=$NEAR/rerun/hosts.csv BATCH_DIR=$NEAR/rerun GPU_ARGS="--near-plan $NEAR/rerun/plan.csv" \
             bash scripts/launch_all.sh "$@"
     fi
 }

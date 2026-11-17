@@ -19,6 +19,8 @@ shift || true
 HOSTS=${HOSTS:-sites/batches/hosts.csv}
 BATCH_DIR=${BATCH_DIR:-$REPO/sites/batches}
 GPU_ARGS=${GPU_ARGS:---per-site-train}
+# tmux session on each machine, launch_near.sh uses its own so old "vulkanos" windows don't block it
+SESSION=${SESSION:-vulkanos}
 # tr: the csv files may have windows line ends
 BATCHES=${*:-$(tail -n +2 "$HOSTS" | tr -d '\r' | cut -d, -f1)}
 host_of() { tr -d '\r' < "$HOSTS" | awk -F, -v b="$1" '$1 == b {print $2}'; }
@@ -45,9 +47,16 @@ start)
         [ -z "$h" ] && { echo "$b: not in $HOSTS"; continue; }
         printf '%s on %-12s ' "$b" "$h"
         $SSH "$h" "
-            if tmux has-session -t vulkanos 2>/dev/null; then echo 'already running, left alone'; exit 0; fi
+            if tmux has-session -t $SESSION 2>/dev/null; then
+                # a finished batch keeps its window open (press Enter); close it so a retry can start
+                if tail -3 '$OUT/logs/$b.log' 2>/dev/null | grep -q '^=== batch $b finished'; then
+                    tmux kill-session -t $SESSION
+                else
+                    echo 'already running, left alone'; exit 0
+                fi
+            fi
             gpu=\$(nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader 2>/dev/null || echo 'no nvidia-smi')
-            tmux new-session -d -s vulkanos \"BATCH_DIR='$BATCH_DIR' GPU_ARGS='$GPU_ARGS' bash '$REPO/scripts/run_batch.sh' $b; echo; echo done, press Enter; read\"
+            tmux new-session -d -s $SESSION \"BATCH_DIR='$BATCH_DIR' GPU_ARGS='$GPU_ARGS' bash '$REPO/scripts/run_batch.sh' $b; echo; echo done, press Enter; read\"
             echo \"started (gpu before start: \$gpu, users: \$(who | awk '{print \$1}' | sort -u | tr '\n' ' '))\"
         " || echo "ssh failed"
     done
@@ -73,7 +82,7 @@ stop)
     for b in $BATCHES; do
         h=$(host_of "$b")
         printf '%s on %-12s ' "$b" "$h"
-        $SSH "$h" "tmux kill-session -t vulkanos && echo stopped || echo 'not running'" || echo "ssh failed"
+        $SSH "$h" "tmux kill-session -t $SESSION && echo stopped || echo 'not running'" || echo "ssh failed"
     done
     ;;
 *)
