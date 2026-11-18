@@ -7,6 +7,9 @@
 #   bash scripts/launch_near.sh retrain     # stage 1 (optional, ~1 h): retrain the PNG / Solomons sites whose
 #                                           #   imagery was blank, with the z17 fallback, so they can be donors
 #   bash scripts/launch_near.sh start       # stage 2: plan + start the reruns, one batch nNN per machine
+#   bash scripts/launch_near.sh retry       # stage 2 sites not done yet, on 5 free Liftarit GPUs (tNN batches).
+#                                           #   options go to scripts/near_retry.py: --gpus N, --dry-run,
+#                                           #   --skip-galapagos, --exclude host1,host2
 #   bash scripts/launch_near.sh status      # progress of whichever stage was started last
 #   bash scripts/launch_near.sh stop
 #
@@ -37,6 +40,9 @@ launch() {  # $1 = retrain | rerun, rest = launch_all.sh args
     if [ "$s" = retrain ]; then
         SESSION=vulkanos-retrain HOSTS=$NEAR/retrain/hosts.csv BATCH_DIR=$NEAR/retrain GPU_ARGS=--per-site-train \
             bash scripts/launch_all.sh "$@"
+    elif [ "$s" = retry ]; then
+        SESSION=vulkanos-near HOSTS=$NEAR/retry/hosts.csv BATCH_DIR=$NEAR/retry GPU_ARGS="--near-plan $NEAR/rerun/plan.csv" \
+            bash scripts/launch_all.sh "$@"
     else
         SESSION=vulkanos-near HOSTS=$NEAR/rerun/hosts.csv BATCH_DIR=$NEAR/rerun GPU_ARGS="--near-plan $NEAR/rerun/plan.csv" \
             bash scripts/launch_all.sh "$@"
@@ -62,13 +68,22 @@ start)
     launch rerun start
     echo "check with: bash scripts/launch_near.sh status"
     ;;
+retry)
+    git pull --ff-only || echo "git pull failed, running the code as it is"
+    py scripts/near_retry.py "$@"
+    case " $* " in *" --dry-run "*) exit 0;; esac
+    [ -f "$NEAR/retry/hosts.csv" ] || exit 1
+    echo retry > "$NEAR/stage"
+    launch retry start
+    echo "check with: bash scripts/launch_near.sh status"
+    ;;
 status|stop)
     s=$(stage)
     echo "stage: $s"
     launch "$s" "$CMD"
     ;;
 *)
-    echo "usage: bash scripts/launch_near.sh plan|retrain|start|status|stop"
+    echo "usage: bash scripts/launch_near.sh plan|retrain|start|retry|status|stop"
     exit 1
     ;;
 esac

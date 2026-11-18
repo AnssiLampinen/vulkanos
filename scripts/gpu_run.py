@@ -239,6 +239,22 @@ def per_site(args, sites, base, radius, common, logs):
 NEAR_MODEL = "site-near"  # models/<site>/site-near/best.pt links to the donor's weights, tag unet-site-near
 
 
+def reuse_predictions(s):
+    # a site that failed after detection in another work folder (overpass 502 at the old osm refetch) still
+    # has its unet-site-near predictions there, since --clean only runs after a success: link them so
+    # detection only does the missing chips. the tiles are downloaded again, compare needs them
+    name = f"unet-{NEAR_MODEL}_z18"
+    here = ROOT / "data" / s / "pred" / name
+    if here.exists() or here.is_symlink():
+        return
+    for old in sorted((Path.home() / "vulkanos-work").glob(f"*/data/{s}/pred/{name}")):
+        if old.resolve() != here.resolve() and not old.is_symlink() and any(old.glob("*.png")):
+            here.parent.mkdir(parents=True, exist_ok=True)
+            here.symlink_to(old)
+            print(f"\n=== {s}: reusing {len(list(old.glob('*.png')))} predictions from {old}")
+            return
+
+
 def near_site(args, sites, radius, common, logs):
     # sites that kept r34: detect again with the weights of the nearest volcano that got its own
     import pandas as pd
@@ -276,8 +292,17 @@ def near_site(args, sites, radius, common, logs):
         grid = [] if (new / "cells.parquet").exists() else radius
         log = logs / f"{s}.log"
         print(f"\n=== {s}: weights of {p['donor']} ({p['donor_km']} km away)")
+        # osm first, before the hour of tiles + detection, so an overpass outage fails fast. never the osm
+        # step in the main run: it forces a refetch even when the first run's osm_buildings.parquet is here
+        if not (new / "osm_buildings.parquet").exists():
+            if not step(f"{s} osm", MAIN + ["run", "--site", s, "--step", "osm"] + grid + common, log):
+                failed.append(s)
+                continue
+            grid = []
+        reuse_predictions(s)
         cmd = MAIN + ["run", "--site", s, "--checkpoint", str(ckpt.relative_to(ROOT)),
                       "--detect-batch", str(args.detect_batch)] + grid + common
+        cmd += [a for x in ["tiles", "detect", "compare", "report"] for a in ("--step", x)]
         if not step(f"{s} detect with nearest-site weights", cmd, log):
             failed.append(s)
         elif args.clean:

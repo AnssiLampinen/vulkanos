@@ -161,10 +161,11 @@ def load_chip(cfg, chip):
     return rgb, valid
 
 
-OVERPASS = ["https://overpass-api.de/api", "https://overpass.kumi.systems/api", "https://overpass.private.coffee/api"]
+OVERPASS = ["https://overpass-api.de/api", "https://overpass.private.coffee/api",
+            "https://maps.mail.ru/osm/tools/overpass/api", "https://overpass.kumi.systems/api"]
 
 
-def fetch_osm(area, cache_dir, tries=8):
+def fetch_osm(area, cache_dir, tries=12):
     ox.settings.use_cache = True
     ox.settings.cache_folder = str(cache_dir)
     ox.settings.requests_timeout = 300
@@ -182,7 +183,7 @@ def fetch_osm(area, cache_dir, tries=8):
         except Exception as e:
             if i == tries - 1:
                 raise
-            wait = min(30 * 2 ** i, 600)
+            wait = min(30 * 2 ** (i // len(OVERPASS)), 300)  # a full round of mirrors before waiting longer
             print(f"  overpass {ox.settings.overpass_url} failed ({str(e).splitlines()[0][:100]}), "
                   f"next mirror in {wait}s")
             time.sleep(wait)

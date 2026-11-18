@@ -48,8 +48,10 @@ start)
         printf '%s on %-12s ' "$b" "$h"
         $SSH "$h" "
             if tmux has-session -t $SESSION 2>/dev/null; then
-                # a finished batch keeps its window open (press Enter); close it so a retry can start
-                if tail -3 '$OUT/logs/$b.log' 2>/dev/null | grep -q '^=== batch $b finished'; then
+                # a finished batch keeps its window open (press Enter); close it so a retry can start.
+                # finished = its log says so, or no run_batch.sh runs here (an older batch's window)
+                if tail -3 '$OUT/logs/$b.log' 2>/dev/null | grep -q '^=== batch $b finished' \
+                        || ! pgrep -u \$USER -f '^bash /[^ ]*scripts/run_batch[.]sh' >/dev/null; then
                     tmux kill-session -t $SESSION
                 else
                     echo 'already running, left alone'; exit 0
