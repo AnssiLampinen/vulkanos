@@ -57,6 +57,9 @@ compare:
   readiness:
     percentile: 20  # low tail: the cell worse than 80% of cells
     min_houses: 10  # skip water, empty land and cells where a few false positives decide the score, 1 keeps all cells with houses
+    # readiness_shrunk / _weighted / _both, robust variants written next to readiness (docs/columns.md)
+    shrink_c: 0.005  # beta prior strength k = shrink_c * site houses: a cell with 0.5% of the site's houses moves halfway to the site average
+    new_min_houses: 1  # cell cut for the variants, shrinkage handles small cells so 1 keeps every cell with houses
 
 volcanoes_file: volcanoes.yaml  # summit coordinates, edit there
 

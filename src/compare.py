@@ -314,7 +314,39 @@ def readiness(scored, percentile=20, min_houses=10):
     return ok.groupby("volcano")["house_completeness"].quantile(percentile / 100), ok.groupby("volcano").size()
 
 
-def area_summary(scored, percentile=20, min_houses=10):
+def weighted_quantile(x, w, q):
+    # value where the cumulative weight first reaches q of the total, sorted by x
+    order = np.argsort(x, kind="stable")
+    x, cum = np.asarray(x)[order], np.cumsum(np.asarray(w, dtype=float)[order])
+    return float(x[np.searchsorted(cum, q * cum[-1])])
+
+
+def readiness_variants(scored, percentile=20, shrink_c=0.005, min_houses=1):
+    # robust versions of readiness, side by side so they can be compared with the old one:
+    #   shrunk:   each cell's house_completeness pulled toward the site's pooled completeness with a beta
+    #             prior of strength k = shrink_c * site houses, (mapped + k * site_avg) / (houses + k).
+    #             a cell holding shrink_c of the site's houses moves halfway to the average, so a 3-house
+    #             cell with no osm no longer scores 0 and the p20 isn't decided by noise in tiny cells
+    #   weighted: house_completeness, percentile over houses instead of cells (cells weighted by house_count)
+    #   both:     shrunk scores, house-weighted percentile
+    q = percentile / 100
+    ok = scored[(scored["no_imagery"] == False) & (scored["house_count"] >= max(min_houses, 1))]
+    rows = {}
+    for v, g in ok.groupby("volcano"):
+        n = g["house_count"].to_numpy(dtype=float)
+        mapped = n - g["house_unmatched_count"].to_numpy(dtype=float)
+        avg = mapped.sum() / n.sum()
+        k = shrink_c * n.sum()
+        shrunk = (mapped + k * avg) / (n + k)
+        rows[v] = {"readiness_shrunk": float(np.quantile(shrunk, q)),
+                   "readiness_weighted": weighted_quantile(mapped / n, n, q),
+                   "readiness_both": weighted_quantile(shrunk, n, q),
+                   "shrink_k": k, "readiness_new_cells": len(g)}
+    cols = ["readiness_shrunk", "readiness_weighted", "readiness_both", "shrink_k", "readiness_new_cells"]
+    return pd.DataFrame.from_dict(rows, orient="index", columns=cols)
+
+
+def area_summary(scored, percentile=20, min_houses=10, shrink_c=0.005, new_min_houses=1):
     # ratio of sums over cells with imagery, so empty cells don't pull it down
     ok = scored[scored["no_imagery"] == False]
     g = ok.groupby("volcano")
@@ -331,6 +363,8 @@ def area_summary(scored, percentile=20, min_houses=10):
     low = ok[(ok["house_count"] > 0) & (ok["house_count"] < min_houses)]
     out["low_count_cells"] = low.groupby("volcano").size()
     out[["readiness_cells", "low_count_cells"]] = out[["readiness_cells", "low_count_cells"]].fillna(0).astype(int)
+    out = out.join(readiness_variants(scored, percentile, shrink_c, new_min_houses))
+    out["readiness_new_cells"] = out["readiness_new_cells"].fillna(0).astype(int)
     return out
 
 
