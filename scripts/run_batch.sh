@@ -16,12 +16,17 @@
 #   weights/<site>.pt         each site's trained weights (~100 MB each), unless NO_WEIGHTS=1
 #                             (in case 3 they stay in ~/vulkanos-work/<batch>/models instead)
 # Finished sites are skipped on a rerun.
+#
+# BATCH_DIR (default sites/batches) is where <batch>.csv is, GPU_ARGS (default --per-site-train) what
+# gpu_run.py does with it. scripts/launch_near.sh sets both for the nearest-site reruns.
 set -e
 REPO="$(cd "$(dirname "$0")/.." && pwd)"   # the clone in the home folder
 B=${1:-}
-if [ -z "$B" ] || [ ! -f "$REPO/sites/batches/$B.csv" ]; then
+BATCH_DIR=${BATCH_DIR:-$REPO/sites/batches}
+GPU_ARGS=${GPU_ARGS:---per-site-train}
+if [ -z "$B" ] || [ ! -f "$BATCH_DIR/$B.csv" ]; then
     echo "usage: bash scripts/run_batch.sh <batch>, batch is one of:"
-    ls "$REPO"/sites/batches/b*.csv | xargs -n1 basename | sed 's/\.csv$//' | tr '\n' ' '; echo
+    ls "$BATCH_DIR"/*.csv | xargs -n1 basename | sed 's/\.csv$//' | grep -v hosts | tr '\n' ' '; echo
     exit 1
 fi
 OUT="$HOME/vulkanos-results"
@@ -80,9 +85,9 @@ if [ ! -f models/ercolano-r34/best.pt ] && [ -f "$REPO/models/ercolano-r34/best.
     cp "$REPO/models/ercolano-r34/best.pt" models/ercolano-r34/
 fi
 
-SITES=sites/batches/$B.csv
+SITES=$BATCH_DIR/$B.csv
 set +e
-python scripts/gpu_run.py --sites-csv "$SITES" --radius 10 --skip-done --per-site-train $CLEAN
+python scripts/gpu_run.py --sites-csv "$SITES" --radius 10 --skip-done $GPU_ARGS $CLEAN
 code=$?
 set -e
 
@@ -90,7 +95,8 @@ ids=$(python scripts/gpu_run.py --sites-csv "$SITES" --list-sites)
 files=()
 for f in data/out/summary_*.csv data/logs; do [ -e "$f" ] && files+=("$f"); done
 for s in $ids; do
-    for f in data/$s/cells_scored_*.parquet models/$s/site-osm/metrics.jsonl models/$s/site-osm/done; do
+    for f in data/$s/cells_scored_*.parquet models/$s/site-osm/metrics.jsonl models/$s/site-osm/done \
+             models/$s/site-near/donor.txt; do
         [ -f "$f" ] && files+=("$f")
     done
     if [ -z "$NO_WEIGHTS" ] && [ -f "models/$s/site-osm/best.pt" ] && [ ! -f "$OUT/weights/$s.pt" ]; then

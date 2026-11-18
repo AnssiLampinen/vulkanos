@@ -90,6 +90,8 @@ def main():
                    help="--per-site-train: delete the imagery tiles and predictions after each finished site, to "
                         "save disk. The scores, weights and map stay, the map just has no imagery under it")
     p.add_argument("--keep-dataset", action="store_true", help="keep data/<site>/train_osm (about 2 GB a site)")
+    p.add_argument("--near-plan", help="plan.csv from scripts/near_plan.py rerun: detect each site with the weights "
+                   "of its nearest retrained volcano (models/<site>/site-near, tag unet-site-near)")
     p.add_argument("--skip-done", action="store_true", help="skip sites that already have their map in data/out")
     p.add_argument("--config", default="config.yaml")
     args = p.parse_args()
@@ -131,6 +133,9 @@ def main():
             sys.exit(f"no {args.checkpoint} and download failed ({e}). Copy it here, or use --train")
 
     radius = ["--radius", str(args.radius)] if args.radius else []
+    if args.near_plan:
+        near_site(args, sites, radius, common, logs)
+        return
     if args.per_site_train:
         per_site(args, sites, ckpt, radius, common, logs)
         return
@@ -227,6 +232,87 @@ def per_site(args, sites, base, radius, common, logs):
     step(f"summary {base.parent.name}", MAIN + ["summary"] + site_args + ["--checkpoint", str(base.relative_to(ROOT))]
          + common, logs / "summary.log")
     print(f"\nmaps in data/out/, weights in models/<site>/{SITE_MODEL}, logs in {logs}")
+    if failed:
+        sys.exit(f"failed sites: {' '.join(failed)} (see their logs)")
+
+
+NEAR_MODEL = "site-near"  # models/<site>/site-near/best.pt links to the donor's weights, tag unet-site-near
+
+
+def reuse_predictions(s):
+    # a site that failed after detection in another work folder (overpass 502 at the old osm refetch) still
+    # has its unet-site-near predictions there, since --clean only runs after a success: link them so
+    # detection only does the missing chips. the tiles are downloaded again, compare needs them
+    name = f"unet-{NEAR_MODEL}_z18"
+    here = ROOT / "data" / s / "pred" / name
+    if here.exists() or here.is_symlink():
+        return
+    for old in sorted((Path.home() / "vulkanos-work").glob(f"*/data/{s}/pred/{name}")):
+        if old.resolve() != here.resolve() and not old.is_symlink() and any(old.glob("*.png")):
+            here.parent.mkdir(parents=True, exist_ok=True)
+            here.symlink_to(old)
+            print(f"\n=== {s}: reusing {len(list(old.glob('*.png')))} predictions from {old}")
+            return
+
+
+def near_site(args, sites, radius, common, logs):
+    # sites that kept r34: detect again with the weights of the nearest volcano that got its own
+    import pandas as pd
+
+    plan = pd.read_csv(args.near_plan).set_index("site")
+    failed = []
+    for s in sites:
+        if s not in plan.index:
+            print(f"\n=== {s}: not in {args.near_plan}, skipping")
+            continue
+        p = plan.loc[s]
+        done = ROOT / "data" / "out" / f"{s}_unet-{NEAR_MODEL}.html"
+        if args.skip_done and done.exists():
+            print(f"\n=== {s}: done already ({done.name}), skipping")
+            continue
+        src = Path(p["donor_weights"])
+        if not src.exists():
+            print(f"\n=== {s}: donor weights {src} missing, skipping")
+            failed.append(s)
+            continue
+        out = ROOT / "models" / s / NEAR_MODEL
+        out.mkdir(parents=True, exist_ok=True)
+        ckpt = out / "best.pt"
+        ckpt.unlink(missing_ok=True)
+        ckpt.symlink_to(src)  # a link, ~100 MB a site saved; the donor's file is only read
+        (out / "donor.txt").write_text(f"{p['donor']} {p['donor_km']} km {src}\n")
+        # grid and osm from the first run, so overpass isn't asked again. copy2 keeps the times, so
+        # osm_buildings.parquet stays newer than cells.parquet and isn't refetched
+        old = Path(str(p["work"])) / "data" / s
+        new = ROOT / "data" / s
+        new.mkdir(parents=True, exist_ok=True)
+        for f in ["cells.parquet", "osm_buildings.parquet"]:
+            if (old / f).exists() and not (new / f).exists():
+                shutil.copy2(old / f, new / f)
+        grid = [] if (new / "cells.parquet").exists() else radius
+        log = logs / f"{s}.log"
+        print(f"\n=== {s}: weights of {p['donor']} ({p['donor_km']} km away)")
+        # osm first, before the hour of tiles + detection, so an overpass outage fails fast. never the osm
+        # step in the main run: it forces a refetch even when the first run's osm_buildings.parquet is here
+        if not (new / "osm_buildings.parquet").exists():
+            if not step(f"{s} osm", MAIN + ["run", "--site", s, "--step", "osm"] + grid + common, log):
+                failed.append(s)
+                continue
+            grid = []
+        reuse_predictions(s)
+        cmd = MAIN + ["run", "--site", s, "--checkpoint", str(ckpt.relative_to(ROOT)),
+                      "--detect-batch", str(args.detect_batch)] + grid + common
+        cmd += [a for x in ["tiles", "detect", "compare", "report"] for a in ("--step", x)]
+        if not step(f"{s} detect with nearest-site weights", cmd, log):
+            failed.append(s)
+        elif args.clean:
+            shutil.rmtree(ROOT / "data" / s / "pred", ignore_errors=True)
+            shutil.rmtree(ROOT / "data" / "tiles", ignore_errors=True)
+
+    site_args = [a for s in sites for a in ("--site", s)]
+    step("summary", MAIN + ["summary"] + site_args + ["--checkpoint", f"models/{sites[0]}/{NEAR_MODEL}/best.pt"] + common,
+         logs / "summary.log")
+    print(f"\nmaps in data/out/*_unet-{NEAR_MODEL}.html, logs in {logs}")
     if failed:
         sys.exit(f"failed sites: {' '.join(failed)} (see their logs)")
 

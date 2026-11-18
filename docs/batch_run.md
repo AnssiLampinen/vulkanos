@@ -99,3 +99,28 @@ Check the home folder with `du -sh ~` before starting. Keep at least 50 GB free.
 Results land next to the others: `~/vulkanos-results/results_b11.tar.gz` ... `b17`, maps in `~/vulkanos-work/b11/data/out/` ...
 The mid-ocean sites (both EPR sites, Romanche Fracture Zone, Ascension) have no people near them and will most likely give
 no houses. Don't run plain `launch_all.sh start` with no batches: it would restart b01 ... b10 too.
+
+## Rerun the r34-only sites with the nearest retrained model
+
+Sites with fewer than 300 OSM buildings kept a copy of r34 (trained around Naples). `scripts/launch_near.sh`
+reruns each of them with the weights of the nearest volcano that got its own retrained weights. From
+`~/vulkanos-team` on agda, after b01..b17 are finished:
+
+```bash
+bash scripts/launch_near.sh plan       # what would be rerun, with whose weights and how far away
+bash scripts/launch_near.sh retrain    # optional stage 1 (~1 h): retrain the PNG / Solomons sites whose imagery was blank
+bash scripts/launch_near.sh status     # wait until every rNN is finished
+bash scripts/launch_near.sh start      # stage 2: the reruns, one batch nNN per machine
+bash scripts/launch_near.sh status
+```
+
+What each site got is read from `models/<site>/site-osm/done` in each batch's work folder (from the
+batch log). A donor must be fine-tuned, have r34 find houses there (none means blank imagery) and keep at
+least 10% of r34's houses with its own weights (no collapsed fine-tune). Stage 2 also reruns fine-tuned
+sites that fail that test. Results use the detector tag `unet-site-near` (maps in
+`~/vulkanos-work/nNN/data/out/<site>_unet-site-near.html`, `~/vulkanos-results/results_nNN.tar.gz`), the
+donor of each site is in `data/near/rerun/plan.csv` and `models/<site>/site-near/donor.txt`.
+`models/<site>/site-near/best.pt` is a link to the donor's weights, nothing is copied or changed.
+Each batch runs in a detached tmux session on its machine (`vulkanos-retrain` for stage 1, `vulkanos-near` for
+stage 2), so logging out doesn't stop it. Watch one with `ssh <host> -t tmux attach -t vulkanos-near`, detach with
+Ctrl-b then d.
