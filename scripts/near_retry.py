@@ -110,7 +110,7 @@ def main():
         todo = todo[todo["site"].isin(args.sites.split(","))]
     todo["galapagos"] = (todo["lon"] < -88) & (todo["lon"] > -93) & (todo["lat"].abs() < 2)
     print(f"{len(plan)} sites in the plan: {len(done & set(plan['site']))} done, "
-          f"{len((running & set(plan["site"])) - done)} in running batches ({' '.join(sorted(busy_hosts)) or 'none'}), "
+          f"{len((running & set(plan['site'])) - done)} in running batches ({' '.join(sorted(busy_hosts)) or 'none'}), "
           f"{len(todo)} to retry")
     if args.skip_galapagos and todo["galapagos"].any():
         print(f"  leaving out Galapagos: {' '.join(todo.loc[todo['galapagos'], 'site'])}")
