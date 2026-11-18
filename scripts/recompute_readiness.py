@@ -46,8 +46,9 @@ def find(roots, tags):
             if m and m.group(2) in tags:
                 found[(m.group(2), m.group(1))] = (p, f)
             elif f.name.endswith(".tar.gz") and f.is_file():
-                with tarfile.open(f) as t:
-                    for mem in t.getmembers():
+                print(f"reading {p}", flush=True)
+                with tarfile.open(f, "r|gz") as t:  # stream: one pass, no gzip rewinds
+                    for mem in t:
                         m, d = pat.search(mem.name), donor_pat.search(mem.name)
                         if m and m.group(2) in tags:
                             found[(m.group(2), m.group(1))] = (f"{p}:{mem.name}", t.extractfile(mem).read())
