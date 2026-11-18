@@ -30,7 +30,7 @@ LIFTARIT = ("agda beeblebrox effrafax fenchurch gallumbits gargravarr hactar kap
             "vranx vroomfondel wonko wowbagger zarniwoop zarquon zem").split()
 SKIP = {"agda", "gallumbits"}  # agda hangs, gallumbits asks a password
 PROBE = ("nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits | head -1; "
-         "echo MINE $(pgrep -u $USER -f 'scripts/gpu_run.py' | wc -l); "
+         "echo MINE $(pgrep -u $USER -f 'scripts/gpu_run[.]py' | wc -l); "
          "echo USERS $(who | awk '{print $1}' | sort -u | wc -l)")
 
 
